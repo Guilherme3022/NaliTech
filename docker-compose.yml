@@ -1,0 +1,107 @@
+# Infra local do LedgerFlow (backend + dependencias).
+#
+# Uso comum:
+#   docker compose up -d postgres redis rabbitmq minio mailpit   # so a infra (rode o backend pela IDE)
+#   docker compose up -d --build                                  # tudo, incluindo o backend em container
+#
+# Painéis:
+#   RabbitMQ  -> http://localhost:15672  (ledgerflow / ledgerflow)
+#   MinIO     -> http://localhost:9001   (ledgerflow / ledgerflow123)
+#   Mailpit   -> http://localhost:8025   (visualiza os e-mails enviados em dev)
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ledgerflow
+      POSTGRES_USER: ledgerflow
+      POSTGRES_PASSWORD: ledgerflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledgerflow -d ledgerflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ledgerflow
+      RABBITMQ_DEFAULT_PASS: ledgerflow
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ledgerflow
+      MINIO_ROOT_PASSWORD: ledgerflow123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP (o backend envia para ca)
+      - "8025:8025"   # UI web para ler os e-mails
+
+  backend:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      minio:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/ledgerflow
+      DB_USER: ledgerflow
+      DB_PASSWORD: ledgerflow
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ledgerflow
+      RABBITMQ_PASSWORD: ledgerflow
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_ACCESS_KEY: ledgerflow
+      STORAGE_SECRET_KEY: ledgerflow123
+      STORAGE_BUCKET: ledgerflow-files
+      STORAGE_REGION: us-east-1
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      JWT_SECRET: dev-jwt-secret-troque-em-producao-min-32-bytes
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      LEDGERFLOW_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+      DEFAULT_ADMIN_EMAIL: admin@ledgerflow.local
+      DEFAULT_ADMIN_PASSWORD: admin123
+    ports:
+      - "8080:8080"
+
+volumes:
+  pg_data:
+  minio_data:

@@ -1,0 +1,138 @@
+# LedgerFlow — Guia de execução e deploy
+
+> As decisões de infraestrutura (qual provedor, quando migrar de plano) são suas
+> — ver `01-infra.md`. Este guia **explica as opções e os passos**; ele não
+> escolhe nem executa nada em nuvem por você.
+
+---
+
+## 1. Rodar localmente
+
+### Pré-requisitos
+- **Docker** (Desktop) e **JDK 21** (para rodar pela IDE).
+
+### Opção A — Backend pela IDE (recomendado para desenvolver)
+
+1. Suba só a infra:
+   ```bash
+   docker compose up -d postgres redis rabbitmq minio mailpit
+   ```
+2. Rode a classe `LedgerFlowApplication` no IntelliJ (▶).
+   - Não precisa de `.env`: o `application.yml` já tem defaults de `localhost`
+     que batem com as portas do compose.
+3. Pronto:
+   - API/Swagger: http://localhost:8080/swagger-ui.html
+   - Health: http://localhost:8080/actuator/health
+   - E-mails enviados (reset de senha etc.): http://localhost:8025 (Mailpit)
+
+### Opção B — Tudo em container
+
+```bash
+docker compose up -d --build
+```
+Sobe infra + backend (build via `Dockerfile`). O backend fica em :8080.
+
+### Primeiro acesso
+Na primeira subida é criado um **admin**:
+`admin@ledgerflow.local` / `admin123` (troque via `DEFAULT_ADMIN_*`).
+
+```bash
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@ledgerflow.local","password":"admin123"}'
+```
+
+### Painéis úteis
+| Serviço | URL | Login |
+|---|---|---|
+| Swagger | http://localhost:8080/swagger-ui.html | — |
+| MinIO | http://localhost:9001 | ledgerflow / ledgerflow123 |
+| RabbitMQ | http://localhost:15672 | ledgerflow / ledgerflow |
+| Mailpit | http://localhost:8025 | — |
+
+---
+
+## 2. O que falta / o que é opcional
+
+| Item | Status | Observação |
+|---|---|---|
+| Backend, Postgres, Storage (MinIO/S3) | ✅ funcional | núcleo do sistema |
+| Redis | ⚪ opcional | starter incluso, mas **sem uso funcional** hoje (não há `@Cacheable`). Pode omitir em produção. |
+| RabbitMQ | ⚪ opcional | o pipeline roda via `@Async` (síncrono). Só necessário se um dia migrar para fila real. |
+| OCR (Tesseract) | ⚠️ depende do ambiente | precisa do binário + `tessdata` na máquina/imagem. Sem ele, PDF escaneado/imagem degrada (confiança baixa) sem quebrar o fluxo. Ver seção 4. |
+| Gateway de pagamento | ⚠️ simulado | provedor padrão `SIMULADO`. Para cobrança real, configurar `ASAAS_API_TOKEN` (E12). |
+| E-mail real | ⚪ opcional | em dev vai para o Mailpit. Em produção, apontar `MAIL_*` para um SMTP (ex: Resend/SendGrid). |
+| Frontend | ❌ fora deste repo | este repositório é só o backend. |
+
+---
+
+## 3. Subir online de graça (trilha do `01-infra.md`)
+
+O backend é um container Spring Boot que lê **tudo de variáveis de ambiente** —
+então o deploy é: escolher onde rodar o container + um Postgres gerenciado + um
+storage S3-compatible. Redis/RabbitMQ podem ficar de fora no MVP.
+
+### Passo a passo (o que **você** precisa fazer)
+
+**a) Banco — Neon (Postgres free)**
+1. Crie um projeto no Neon e copie a connection string.
+2. No deploy, defina:
+   - `DB_URL=jdbc:postgresql://<host>/<db>?sslmode=require`
+   - `DB_USER=<user>` / `DB_PASSWORD=<senha>`
+   - (o Flyway cria o schema sozinho na 1ª subida)
+
+**b) Storage — Cloudflare R2 (10 GB free, S3-compatible)**
+1. Crie um bucket no R2 (crie pelo painel para não depender de permissão de criar bucket).
+2. Gere um token de API (Access Key / Secret).
+3. Defina:
+   - `STORAGE_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com`
+   - `STORAGE_ACCESS_KEY=...` / `STORAGE_SECRET_KEY=...`
+   - `STORAGE_BUCKET=<seu-bucket>` / `STORAGE_REGION=auto`
+   - O código já usa path-style, então funciona igual ao MinIO local.
+
+**c) Backend — Railway ou Render (free)**
+1. Conecte este repositório. Ambos detectam o `Dockerfile` e fazem o build.
+2. Cadastre as variáveis de ambiente (seções a, b + as de segurança abaixo).
+3. Health check da plataforma: aponte para `/actuator/health`.
+   - Como você provavelmente **não** terá Redis/RabbitMQ, defina:
+     `REDIS_HEALTH_ENABLED=false` e `RABBIT_HEALTH_ENABLED=false`
+     (senão o health fica DOWN e a plataforma marca o serviço como não saudável).
+
+**d) Variáveis de segurança obrigatórias em produção**
+- `JWT_SECRET` = segredo forte com **no mínimo 32 caracteres**.
+- `LEDGERFLOW_ENCRYPTION_KEY` = **exatamente 32 caracteres** (senão o app não sobe).
+- `DEFAULT_ADMIN_PASSWORD` = troque o padrão.
+- `CORS_ALLOWED_ORIGINS` = domínio do seu frontend (ex: `https://app.seudominio.com.br`).
+
+**e) (Opcional) DNS/HTTPS — Cloudflare**
+- Aponte um subdomínio (ex: `api.seudominio.com.br`) para o serviço do Railway/Render.
+
+**f) (Opcional) Cache/fila gerenciados** — só quando precisar:
+- Redis → Upstash (free). Atenção: exige **senha + TLS**; a config atual de Redis
+  não define senha/TLS, então precisaria de ajuste. Como o Redis hoje é opcional,
+  o mais simples é deixar desativado.
+- Fila → CloudAMQP (free "Little Lemur"), só se migrar o pipeline para fila real.
+
+### Resumo mínimo para o MVP online
+**Railway/Render (backend) + Neon (Postgres) + R2 (storage)** — com
+`REDIS_HEALTH_ENABLED=false` e `RABBIT_HEALTH_ENABLED=false`. Custo ≈ R$ 0.
+
+---
+
+## 4. Nota sobre OCR em produção
+A imagem `Dockerfile` atual **não** instala o Tesseract. Se você precisar de OCR
+de PDFs escaneados/imagens em produção, será necessário adicionar ao estágio de
+runtime do `Dockerfile` os pacotes `tesseract-ocr` e `tesseract-ocr-por` e apontar
+`OCR_TESSDATA_PATH`. Para o MVP (arquivos CSV/OFX/XLSX/PDF com texto nativo), o OCR
+não é necessário — o pipeline funciona sem ele.
+
+---
+
+## 5. Checklist rápido de go-live
+- [ ] `DB_URL/DB_USER/DB_PASSWORD` (Neon, com `sslmode=require`)
+- [ ] `STORAGE_*` (R2, bucket criado)
+- [ ] `JWT_SECRET` forte (≥32) e `LEDGERFLOW_ENCRYPTION_KEY` (=32)
+- [ ] `DEFAULT_ADMIN_PASSWORD` trocado
+- [ ] `CORS_ALLOWED_ORIGINS` = domínio do frontend
+- [ ] `REDIS_HEALTH_ENABLED=false`, `RABBIT_HEALTH_ENABLED=false` (se sem esses serviços)
+- [ ] Health check da plataforma → `/actuator/health`

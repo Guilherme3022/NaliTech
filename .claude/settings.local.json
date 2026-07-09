@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/guilherme/**)",
+      "Read(//home/guilherme/.agents-LedgerFlow/**)",
+      "Bash(git config *)",
+      "Bash(command -v acli)",
+      "Bash(acli --help)"
+    ]
+  }
+}
