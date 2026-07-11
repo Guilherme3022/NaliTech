@@ -2,6 +2,7 @@ package com.nalitech.modules.account.service;
 
 import com.nalitech.modules.account.entity.LearningHistory;
 import com.nalitech.modules.account.repository.LearningHistoryRepository;
+import com.nalitech.shared.util.DescriptionNormalizer;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,10 @@ public class LearningService {
         if (descricao == null || descricao.isBlank() || contaId == null) {
             return;
         }
-        String padrao = normalize(descricao);
+        String padrao = DescriptionNormalizer.normalize(descricao);
+        if (padrao.isBlank()) {
+            return;
+        }
         LearningHistory history = learningRepository
                 .findScoped(empresaId, clienteId, padrao)
                 .orElseGet(() -> novo(empresaId, clienteId, padrao, contaId));
@@ -45,8 +49,4 @@ public class LearningService {
         return history;
     }
 
-    private String normalize(String descricao) {
-        String padrao = descricao.toLowerCase().replaceAll("\\s+", " ").trim();
-        return padrao.length() > 200 ? padrao.substring(0, 200) : padrao;
-    }
 }

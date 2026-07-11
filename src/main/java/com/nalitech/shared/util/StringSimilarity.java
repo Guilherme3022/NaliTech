@@ -1,8 +1,42 @@
 package com.nalitech.shared.util;
 
+import java.util.HashSet;
+import java.util.Set;
+
 public final class StringSimilarity {
 
     private StringSimilarity() {
+    }
+
+    /**
+     * Similaridade por palavras (indice de Jaccard): |A ∩ B| / |A ∪ B| dos tokens.
+     * Mais robusta que a distancia de caracteres para descricoes com partes
+     * variaveis. Espera strings ja normalizadas (tokens separados por espaco).
+     */
+    public static double tokenSimilarity(String a, String b) {
+        if (a == null || b == null) {
+            return 0.0;
+        }
+        Set<String> setA = tokens(a);
+        Set<String> setB = tokens(b);
+        if (setA.isEmpty() || setB.isEmpty()) {
+            return 0.0;
+        }
+        Set<String> intersecao = new HashSet<>(setA);
+        intersecao.retainAll(setB);
+        Set<String> uniao = new HashSet<>(setA);
+        uniao.addAll(setB);
+        return (double) intersecao.size() / uniao.size();
+    }
+
+    private static Set<String> tokens(String value) {
+        Set<String> tokens = new HashSet<>();
+        for (String token : value.trim().split("\\s+")) {
+            if (!token.isBlank()) {
+                tokens.add(token);
+            }
+        }
+        return tokens;
     }
 
     public static double ratio(String a, String b) {
