@@ -1,4 +1,4 @@
-# LedgerFlow — Guia de execução e deploy
+# Nalitech — Guia de execução e deploy
 
 > As decisões de infraestrutura (qual provedor, quando migrar de plano) são suas
 > — ver `01-infra.md`. Este guia **explica as opções e os passos**; ele não
@@ -17,7 +17,7 @@
    ```bash
    docker compose up -d postgres redis rabbitmq minio mailpit
    ```
-2. Rode a classe `LedgerFlowApplication` no IntelliJ (▶).
+2. Rode a classe `NalitechApplication` no IntelliJ (▶).
    - Não precisa de `.env`: o `application.yml` já tem defaults de `localhost`
      que batem com as portas do compose.
 3. Pronto:
@@ -34,20 +34,20 @@ Sobe infra + backend (build via `Dockerfile`). O backend fica em :8080.
 
 ### Primeiro acesso
 Na primeira subida é criado um **admin**:
-`admin@ledgerflow.local` / `admin123` (troque via `DEFAULT_ADMIN_*`).
+`admin@nalitech.local` / `admin123` (troque via `DEFAULT_ADMIN_*`).
 
 ```bash
 curl -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@ledgerflow.local","password":"admin123"}'
+  -d '{"email":"admin@nalitech.local","password":"admin123"}'
 ```
 
 ### Painéis úteis
 | Serviço | URL | Login |
 |---|---|---|
 | Swagger | http://localhost:8080/swagger-ui.html | — |
-| MinIO | http://localhost:9001 | ledgerflow / ledgerflow123 |
-| RabbitMQ | http://localhost:15672 | ledgerflow / ledgerflow |
+| MinIO | http://localhost:9001 | nalitech / nalitech123 |
+| RabbitMQ | http://localhost:15672 | nalitech / nalitech |
 | Mailpit | http://localhost:8025 | — |
 
 ---
@@ -62,7 +62,7 @@ curl -X POST http://localhost:8080/auth/login \
 | OCR (Tesseract) | ⚠️ depende do ambiente | precisa do binário + `tessdata` na máquina/imagem. Sem ele, PDF escaneado/imagem degrada (confiança baixa) sem quebrar o fluxo. Ver seção 4. |
 | Gateway de pagamento | ⚠️ simulado | provedor padrão `SIMULADO`. Para cobrança real, configurar `ASAAS_API_TOKEN` (E12). |
 | E-mail real | ⚪ opcional | em dev vai para o Mailpit. Em produção, apontar `MAIL_*` para um SMTP (ex: Resend/SendGrid). |
-| Frontend | ✅ repo separado | fica em `../LedgerFlowFront` (React + Vite). Deploy coberto na seção 3.5. |
+| Frontend | ✅ repo separado | fica em `../NalitechFront` (React + Vite). Deploy coberto na seção 3.5. |
 
 ---
 
@@ -118,14 +118,14 @@ build estático (HTML/CSS/JS) — vai em qualquer host de site estático grátis
      `REDIS_HEALTH_ENABLED=false` e `RABBIT_HEALTH_ENABLED=false`
      (senão o health fica DOWN e a plataforma marca o serviço como não saudável).
 4. Anote a **URL pública** que a plataforma gera (ex:
-   `https://ledgerflow-api.up.railway.app`). Você vai precisar dela no passo 3.5
+   `https://nalitech-api.up.railway.app`). Você vai precisar dela no passo 3.5
    (frontend) e no `CORS_ALLOWED_ORIGINS`.
 
 **d) Variáveis de segurança obrigatórias em produção**
 - `JWT_SECRET` = segredo forte com **no mínimo 32 caracteres**.
-- `LEDGERFLOW_ENCRYPTION_KEY` = **exatamente 32 caracteres** (senão o app não sobe).
+- `NALITECH_ENCRYPTION_KEY` = **exatamente 32 caracteres** (senão o app não sobe).
 - `DEFAULT_ADMIN_PASSWORD` = troque o padrão.
-- `CORS_ALLOWED_ORIGINS` = domínio do seu frontend (ex: `https://ledgerflow.vercel.app`).
+- `CORS_ALLOWED_ORIGINS` = domínio do seu frontend (ex: `https://nalitech.vercel.app`).
   Você só vai saber esse valor depois do passo 3.5 — pode deixar provisório e
   voltar aqui para ajustar (ver 3.6).
 
@@ -140,10 +140,10 @@ build estático (HTML/CSS/JS) — vai em qualquer host de site estático grátis
 
 ### 3.5. Frontend — Vercel (ou Netlify / Cloudflare Pages), free
 
-O frontend fica no repositório irmão `../LedgerFlowFront` (React + Vite). Ele
+O frontend fica no repositório irmão `../NalitechFront` (React + Vite). Ele
 é só arquivos estáticos — qualquer host de site estático serve. Passos na Vercel:
 
-1. **Suba `../LedgerFlowFront` para o GitHub** (é um repo git próprio).
+1. **Suba `../NalitechFront` para o GitHub** (é um repo git próprio).
 2. Na Vercel, **New Project → importe esse repositório**. Ela detecta o Vite sozinha:
    - Build command: `npm run build`
    - Output directory: `dist`
@@ -151,10 +151,10 @@ O frontend fica no repositório irmão `../LedgerFlowFront` (React + Vite). Ele
      Router para `index.html` — sem ele, dar F5 numa rota interna daria 404.)
 3. Em **Settings → Environment Variables**, crie:
    - `VITE_API_BASE_URL` = a **URL pública do backend** do passo (c), ex:
-     `https://ledgerflow-api.up.railway.app`
+     `https://nalitech-api.up.railway.app`
    > ⚠️ O Vite embute variáveis `VITE_*` no bundle **em tempo de build**. Se você
    > mudar essa variável depois, precisa **refazer o deploy** (redeploy) para valer.
-4. Deploy. A Vercel gera a URL pública (ex: `https://ledgerflow.vercel.app`).
+4. Deploy. A Vercel gera a URL pública (ex: `https://nalitech.vercel.app`).
 
 > **Alternativa Docker + nginx (Railway/Render):** o frontend também tem
 > `Dockerfile` + `nginx.conf`. Nesse caso a URL da API entra como **build arg**:
@@ -165,7 +165,7 @@ O frontend fica no repositório irmão `../LedgerFlowFront` (React + Vite). Ele
 
 Depois que o frontend tem URL pública, volte no **backend** e ajuste o CORS:
 
-- `CORS_ALLOWED_ORIGINS=https://ledgerflow.vercel.app`
+- `CORS_ALLOWED_ORIGINS=https://nalitech.vercel.app`
   (o domínio exato do frontend, com `https://`, sem barra no final; vários
   domínios podem ser separados por vírgula).
 
@@ -198,14 +198,14 @@ não é necessário — o pipeline funciona sem ele.
 **Backend**
 - [ ] `DB_URL/DB_USER/DB_PASSWORD` (Neon, com `sslmode=require`)
 - [ ] `STORAGE_*` (R2, bucket criado)
-- [ ] `JWT_SECRET` forte (≥32) e `LEDGERFLOW_ENCRYPTION_KEY` (=32)
+- [ ] `JWT_SECRET` forte (≥32) e `NALITECH_ENCRYPTION_KEY` (=32)
 - [ ] `DEFAULT_ADMIN_PASSWORD` trocado
 - [ ] `CORS_ALLOWED_ORIGINS` = domínio do frontend (preenchido após o deploy do front)
 - [ ] `REDIS_HEALTH_ENABLED=false`, `RABBIT_HEALTH_ENABLED=false` (se sem esses serviços)
 - [ ] Health check da plataforma → `/actuator/health`
 - [ ] URL pública da API anotada
 
-**Frontend** (`../LedgerFlowFront`)
+**Frontend** (`../NalitechFront`)
 - [ ] Repo no GitHub e importado na Vercel (ou host estático equivalente)
 - [ ] `VITE_API_BASE_URL` = URL pública da API
 - [ ] Redeploy feito **depois** de setar/alterar `VITE_API_BASE_URL`

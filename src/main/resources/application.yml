@@ -1,11 +1,11 @@
 spring:
   application:
-    name: ledgerflow-backend
+    name: nalitech-backend
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/ledgerflow}
-    username: ${DB_USER:ledgerflow}
-    password: ${DB_PASSWORD:ledgerflow}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/nalitech}
+    username: ${DB_USER:nalitech}
+    password: ${DB_PASSWORD:nalitech}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -31,8 +31,8 @@ spring:
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USER:ledgerflow}
-    password: ${RABBITMQ_PASSWORD:ledgerflow}
+    username: ${RABBITMQ_USER:nalitech}
+    password: ${RABBITMQ_PASSWORD:nalitech}
 
   mail:
     host: ${MAIL_HOST:localhost}
@@ -55,7 +55,7 @@ server:
   port: ${SERVER_PORT:8080}
 
 # ----- Configuracoes proprias da aplicacao (lidas via @ConfigurationProperties) -----
-ledgerflow:
+nalitech:
   jwt:
     secret: ${JWT_SECRET:troque-isso-por-um-segredo-forte-com-no-minimo-32-bytes}
     expiration-seconds: ${JWT_EXPIRATION:3600}
@@ -64,9 +64,9 @@ ledgerflow:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   storage:
     endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
-    access-key: ${STORAGE_ACCESS_KEY:ledgerflow}
-    secret-key: ${STORAGE_SECRET_KEY:ledgerflow123}
-    bucket: ${STORAGE_BUCKET:ledgerflow-files}
+    access-key: ${STORAGE_ACCESS_KEY:nalitech}
+    secret-key: ${STORAGE_SECRET_KEY:nalitech123}
+    bucket: ${STORAGE_BUCKET:nalitech-files}
     region: ${STORAGE_REGION:us-east-1}
   rate-limit:
     # Requisicoes permitidas por janela nos endpoints publicos (login, reset de senha).

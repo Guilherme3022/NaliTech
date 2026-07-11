@@ -14,12 +14,12 @@ FROM eclipse-temurin:21-jre-jammy AS runtime
 WORKDIR /app
 
 # Usuario nao-root por seguranca.
-RUN groupadd --system ledgerflow && useradd --system --gid ledgerflow ledgerflow
+RUN groupadd --system nalitech && useradd --system --gid nalitech nalitech
 
 COPY --from=build /app/target/*.jar app.jar
-RUN chown ledgerflow:ledgerflow app.jar
+RUN chown nalitech:nalitech app.jar
 
-USER ledgerflow
+USER nalitech
 EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

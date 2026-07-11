@@ -18,4 +18,4 @@ CREATE TABLE companies (
 -- Empresa padrao do escritorio inicial (mesmo UUID usado pelo DataInitializer).
 INSERT INTO companies (id, cnpj, razao_social, regime_tributario, status)
 VALUES ('00000000-0000-0000-0000-000000000001', '00000000000191',
-        'Escritorio Padrao LedgerFlow', 'SIMPLES_NACIONAL', 'ATIVA');
+        'Escritorio Padrao Nalitech', 'SIMPLES_NACIONAL', 'ATIVA');

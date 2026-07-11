@@ -1,6 +1,6 @@
-# LedgerFlow — Backend
+# Nalitech — Backend
 
-Backend do **LedgerFlow**, um sistema de apoio a escritórios de contabilidade que
+Backend do **Nalitech**, um sistema de apoio a escritórios de contabilidade que
 automatiza o caminho de um documento financeiro do upload até a exportação para os
 sistemas contábeis do mercado: **upload → OCR → parsing → normalização → conciliação
 bancária → classificação contábil → exportação**, com painel, financeiro do
@@ -71,7 +71,7 @@ Princípios seguidos (DDD + Clean Architecture, de forma pragmática):
 ## Estrutura de pastas
 
 ```
-src/main/java/com/ledgerflow/
+src/main/java/com/nalitech/
   config/            # Security, OpenAPI, Storage, JPA auditing, properties, seed inicial
   security/          # JWT (service, filtro), usuário autenticado, rate limiting
   shared/            # domínio base (entidades auditáveis), exceções, storage, utils, validação, cripto
@@ -171,11 +171,11 @@ A **conciliação** (E8) usa um algoritmo em camadas: (1) match exato por data+v
 ## Integração externa (n8n)
 
 Em vez de implementar cada canal (WhatsApp, planilhas, CRM) dentro do backend, o
-LedgerFlow expõe um **padrão único**:
+Nalitech expõe um **padrão único**:
 
 - **Saída** — `webhook_subscriptions`: o n8n assina eventos (`upload.processado`,
   `conciliacao.pendente`, `cobranca.paga`, `obrigacao.vencendo`, ...). Cada entrega é
-  assinada (`X-LedgerFlow-Signature`) e registrada em `webhook_deliveries`, com
+  assinada (`X-Nalitech-Signature`) e registrada em `webhook_deliveries`, com
   retentativa e backoff.
 - **Entrada** — `api_keys`: o n8n chama a API (ex: `POST /uploads`) usando `X-API-Key`.
 
@@ -209,7 +209,7 @@ LedgerFlow expõe um **padrão único**:
 5. **Build do jar / imagem Docker**:
    ```bash
    mvn clean package
-   docker build -t ledgerflow-backend .
+   docker build -t nalitech-backend .
    ```
 
 ### Fluxo rápido de uso
@@ -251,8 +251,8 @@ já estão no `pom.xml`).
 ## Observabilidade
 
 - `/actuator/health`, `/actuator/info`, `/actuator/prometheus`.
-- Métricas customizadas: `ledgerflow.uploads.processados`, `ledgerflow.uploads.erro`,
-  `ledgerflow.movimentacoes.geradas`.
+- Métricas customizadas: `nalitech.uploads.processados`, `nalitech.uploads.erro`,
+  `nalitech.movimentacoes.geradas`.
 - Logs em JSON ativando o profile `json` (`SPRING_PROFILES_ACTIVE=json`).
 
 ---

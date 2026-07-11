@@ -1,4 +1,4 @@
-# Módulos do LedgerFlow — Guia de Uso
+# Módulos do Nalitech — Guia de Uso
 
 Este documento explica, de forma prática, **o que cada módulo faz** e **como
 usar** o sistema no dia a dia. O foco é o fluxo principal: subir extratos →
@@ -116,7 +116,7 @@ Trilha de ações relevantes do sistema. Acesso: `ADMIN`.
 
 ### 13. Configurações
 - **Webhooks de saída** — `/webhooks/subscriptions`: cadastre URLs para o
-  LedgerFlow notificar sistemas externos em eventos.
+  Nalitech notificar sistemas externos em eventos.
 - **API Keys** — `/api-keys`: chaves para integrações programáticas.
 - **Notificações**: por padrão só o canal **e-mail** está ativo. Os canais
   **WhatsApp** e **Push** estão **ocultos/não implementados** nativamente
@@ -129,7 +129,7 @@ Trilha de ações relevantes do sistema. Acesso: `ADMIN`.
 
 Conciliar é **casar** uma movimentação do extrato com sua contrapartida (outro
 lançamento correspondente) para confirmar que aquele valor é legítimo e sabemos
-a que ele se refere. No LedgerFlow isso acontece em **camadas em cascata**: a
+a que ele se refere. No Nalitech isso acontece em **camadas em cascata**: a
 primeira que encontrar um bom candidato vence.
 
 ### Quando dispara
