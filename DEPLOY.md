@@ -76,7 +76,7 @@ curl -X POST http://localhost:8080/auth/login \
 >            │  HTTPS
 >            ▼
 >   [ Frontend estático ]  ──── chamadas /api ───►  [ Backend Spring Boot ]
->   (Vercel / Netlify /                                (Railway / Render)
+>   (Vercel / Netlify /                          (Render / Cloud Run / Oracle)
 >    Cloudflare Pages)                                     │        │
 >                                                          ▼        ▼
 >                                                   [ Neon Postgres ] [ R2 storage ]
@@ -110,16 +110,57 @@ build estático (HTML/CSS/JS) — vai em qualquer host de site estático grátis
    - `STORAGE_BUCKET=<seu-bucket>` / `STORAGE_REGION=auto`
    - O código já usa path-style, então funciona igual ao MinIO local.
 
-**c) Backend — Railway ou Render (free)**
-1. Conecte este repositório. Ambos detectam o `Dockerfile` e fazem o build.
+**c) Backend — onde rodar o container Spring Boot**
+
+Essa é a decisão que mais afeta **experiência** e **custo** (ver `CUSTOS.md`).
+O backend é um container que lê tudo de variáveis de ambiente; qualquer host que
+rode Docker serve. O que muda entre as opções é **se a instância dorme** e
+**quanta RAM** você tem — e Spring Boot é "faminto" de memória.
+
+| Opção | Sempre ligado? | RAM (free) | Quando usar |
+|---|---|---|---|
+| **Render** (free web service) | ❌ dorme após ~15 min ocioso | 512 MB | Testar/MVP. 1º acesso após dormir leva ~30–50s (cold start). |
+| **Google Cloud Run** | ⚪ escala a zero (paga por uso) | configurável | Quase grátis em pouco tráfego; usa o `Dockerfile`. Também tem cold start. |
+| **Oracle Cloud "Always Free"** | ✅ **sim, de verdade** | até **24 GB** (ARM Ampere A1) | Uso real (escritório): VM que **não dorme**. Custo: mais setup manual. |
+| **Railway / Fly.io** | ✅ (pago) | conforme plano | ~US$ 5–7/mês; simples e sempre-ligado, sem dor de cabeça. |
+
+> ⚠️ **Railway não tem mais tier gratuito contínuo** (dá só um crédito inicial de
+> teste e depois cobra). Para "grátis de verdade e sempre ligado", a escolha é
+> **Oracle Always Free**; para "grátis e simples aceitando cold start", **Render**
+> ou **Cloud Run**.
+
+**Passos (valem para Render / Cloud Run / Railway — plataformas com deploy por Docker):**
+1. Conecte este repositório. A plataforma detecta o `Dockerfile` e faz o build.
 2. Cadastre as variáveis de ambiente (seções a, b + as de segurança abaixo).
 3. Health check da plataforma: aponte para `/actuator/health`.
    - Como você provavelmente **não** terá Redis/RabbitMQ, defina:
      `REDIS_HEALTH_ENABLED=false` e `RABBIT_HEALTH_ENABLED=false`
      (senão o health fica DOWN e a plataforma marca o serviço como não saudável).
-4. Anote a **URL pública** que a plataforma gera (ex:
-   `https://nalitech-api.up.railway.app`). Você vai precisar dela no passo 3.5
+4. **Memória (importante nos free tiers de 512 MB):** limite o heap da JVM para
+   não estourar o container e sofrer `OOMKilled`. Defina:
+   `JAVA_TOOL_OPTIONS=-Xmx350m -XX:MaxRAMPercentage=70`
+   Com Oracle ARM (24 GB) isso deixa de ser preocupação.
+5. Anote a **URL pública** que a plataforma gera (ex:
+   `https://nalitech-api.onrender.com`). Você vai precisar dela no passo 3.5
    (frontend) e no `CORS_ALLOWED_ORIGINS`.
+
+**Especificidades por opção:**
+- **Render:** "New Web Service → From a repository", runtime **Docker**. O plano
+  free dorme; se o escritório for usar de verdade, suba para o plano pago
+  (~US$ 7/mês) para ficar sempre ligado e evitar o cold start no login.
+- **Google Cloud Run:** `gcloud run deploy --source .` (usa o `Dockerfile`).
+  Defina `--min-instances=0` (grátis, com cold start) ou `--min-instances=1`
+  (sem cold start, mas passa a custar). Cloud Run injeta a porta em `$PORT` —
+  o Spring já lê `SERVER_PORT`, então mapeie `SERVER_PORT=$PORT` (ou 8080).
+- **Oracle Always Free:** crie uma VM **Ampere A1 (ARM)**, instale Docker,
+  rode `docker compose` (só o serviço `backend`) ou o container isolado, e
+  coloque um **nginx/Caddy** na frente para TLS. É o único 100% grátis e
+  sempre-ligado, ao custo de você administrar o servidor.
+
+> Cold start em números: uma instância que dormiu precisa **acordar + subir o
+> Spring Boot** (~15–40s no total). Para demonstração tudo bem; para um cliente
+> logando no dia a dia, é ruim — por isso, em uso real, prefira uma opção
+> **sempre-ligada** (Oracle grátis ou um plano pago barato).
 
 **d) Variáveis de segurança obrigatórias em produção**
 - `JWT_SECRET` = segredo forte com **no mínimo 32 caracteres**.
@@ -177,10 +218,13 @@ proxy em produção (o proxy `/api → localhost:8080` do `vite.config.ts` só v
 desenvolvimento). Por isso o CORS no backend é obrigatório em produção.
 
 ### Resumo mínimo para o MVP online
-**Neon (Postgres) + R2 (storage) + Railway/Render (backend) + Vercel (frontend)** —
-com `REDIS_HEALTH_ENABLED=false`, `RABBIT_HEALTH_ENABLED=false`,
-`VITE_API_BASE_URL` apontando pro backend e `CORS_ALLOWED_ORIGINS` apontando pro
-frontend. Custo ≈ R$ 0.
+**Neon (Postgres) + R2 (storage) + backend (Render/Cloud Run grátis, ou Oracle
+Always Free para não dormir) + Vercel (frontend)** — com
+`REDIS_HEALTH_ENABLED=false`, `RABBIT_HEALTH_ENABLED=false`, `JAVA_TOOL_OPTIONS`
+limitando o heap nos free tiers de 512 MB, `VITE_API_BASE_URL` apontando pro
+backend e `CORS_ALLOWED_ORIGINS` apontando pro frontend. Custo ≈ R$ 0.
+
+> Detalhes de custo por item e quando migrar de plano: ver `CUSTOS.md`.
 
 ---
 
@@ -202,6 +246,8 @@ não é necessário — o pipeline funciona sem ele.
 - [ ] `DEFAULT_ADMIN_PASSWORD` trocado
 - [ ] `CORS_ALLOWED_ORIGINS` = domínio do frontend (preenchido após o deploy do front)
 - [ ] `REDIS_HEALTH_ENABLED=false`, `RABBIT_HEALTH_ENABLED=false` (se sem esses serviços)
+- [ ] `JAVA_TOOL_OPTIONS=-Xmx350m -XX:MaxRAMPercentage=70` (se free tier de 512 MB)
+- [ ] Host **sempre-ligado** se for uso real (Oracle Always Free ou plano pago) — evita cold start
 - [ ] Health check da plataforma → `/actuator/health`
 - [ ] URL pública da API anotada
 
