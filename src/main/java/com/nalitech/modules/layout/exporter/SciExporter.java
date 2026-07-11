@@ -14,9 +14,12 @@ public class SciExporter extends AbstractLayoutExporter {
     }
 
     @Override
-    public ExportedFile export(List<Movement> movements) {
+    public ExportedFile export(List<Movement> movements, ExportContext context) {
         String content = movements.stream()
-                .map(m -> pad(data(m), 10) + pad(valor(m), 15) + pad(descricao(m), 40))
+                .map(m -> pad(data(m), 10) + pad(valor(m), 15)
+                        + pad(debito(m, context), 15) + pad(credito(m, context), 15)
+                        + pad(centroCusto(m, context), 15) + pad(filial(m, context), 15)
+                        + pad(descricao(m), 40))
                 .collect(Collectors.joining("\n"));
         return text("export-sci.txt", content);
     }

@@ -1,7 +1,11 @@
 package com.nalitech.modules.account.controller;
 
+import com.nalitech.modules.account.dto.AccountDtos.BranchAssignRequest;
 import com.nalitech.modules.account.dto.AccountDtos.ClassifyRequest;
+import com.nalitech.modules.account.dto.AccountDtos.CostCenterAssignRequest;
+import com.nalitech.modules.account.dto.AccountDtos.ManualEntryRequest;
 import com.nalitech.modules.account.dto.AccountDtos.SuggestionResponse;
+import jakarta.validation.Valid;
 import com.nalitech.modules.account.entity.AiSuggestion;
 import com.nalitech.modules.account.service.ClassificationService;
 import com.nalitech.modules.account.service.ClassificationSuggestionService;
@@ -41,5 +45,26 @@ public class MovementClassificationController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void classify(@PathVariable UUID id, @RequestBody ClassifyRequest request) {
         classificationService.classify(id, request.contaId());
+    }
+
+    /** Ajuste manual do lancamento: define debito e credito diretamente (partida dobrada). */
+    @PostMapping("/{id}/entry")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setEntry(@PathVariable UUID id, @Valid @RequestBody ManualEntryRequest request) {
+        classificationService.setEntry(id, request.contaDebitoId(), request.contaCreditoId());
+    }
+
+    /** Atribuicao manual de centro de custo (Increment 4). */
+    @PostMapping("/{id}/cost-center")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setCostCenter(@PathVariable UUID id, @RequestBody CostCenterAssignRequest request) {
+        classificationService.setCostCenter(id, request.centroCustoId());
+    }
+
+    /** Atribuicao manual de filial (Increment 5). */
+    @PostMapping("/{id}/branch")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setBranch(@PathVariable UUID id, @RequestBody BranchAssignRequest request) {
+        classificationService.setBranch(id, request.filialId());
     }
 }

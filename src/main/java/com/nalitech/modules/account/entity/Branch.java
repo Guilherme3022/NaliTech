@@ -9,23 +9,27 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Filial de um cliente (matriz/filiais), com CNPJ proprio. */
 @Entity
-@Table(name = "learning_history")
+@Table(name = "branches")
 @Getter
 @Setter
 @NoArgsConstructor
-public class LearningHistory extends TenantEntity {
+public class Branch extends TenantEntity {
 
-    @Column(name = "descricao_padrao", nullable = false, length = 200)
-    private String descricaoPadrao;
+    @Column(nullable = false, length = 30)
+    private String codigo;
 
-    @Column(name = "conta_id", nullable = false)
-    private UUID contaId;
+    @Column(nullable = false, length = 120)
+    private String nome;
+
+    @Column(length = 14)
+    private String cnpj;
 
     @Column(nullable = false)
-    private int ocorrencias = 1;
+    private boolean ativo = true;
 
-    // Aprendizado por cliente (Increment 3). null = escopo do escritorio.
+    // null = compartilhada (escritorio); preenchido = especifica do cliente.
     @Column(name = "cliente_id")
     private UUID clienteId;
 }

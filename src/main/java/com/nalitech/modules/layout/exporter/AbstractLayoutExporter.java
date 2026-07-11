@@ -39,6 +39,22 @@ abstract class AbstractLayoutExporter implements LayoutExporter {
         return movement.getDocumento() == null ? "" : movement.getDocumento();
     }
 
+    protected String debito(Movement movement, ExportContext context) {
+        return context.codigo(movement.getContaDebitoId());
+    }
+
+    protected String credito(Movement movement, ExportContext context) {
+        return context.codigo(movement.getContaCreditoId());
+    }
+
+    protected String centroCusto(Movement movement, ExportContext context) {
+        return context.centroCusto(movement.getCentroCustoId());
+    }
+
+    protected String filial(Movement movement, ExportContext context) {
+        return context.filial(movement.getFilialId());
+    }
+
     protected ExportedFile text(String filename, String content) {
         return new ExportedFile(filename, "text/plain",
                 content.getBytes(java.nio.charset.StandardCharsets.UTF_8));

@@ -96,6 +96,7 @@ public class AccountService {
         account.setTipo(request.tipo());
         account.setCategoryId(request.categoryId());
         account.setParentId(request.parentId());
+        account.setClienteId(request.clienteId());
     }
 
     private void apply(AccountRule rule, AccountRuleRequest request) {
@@ -107,16 +108,20 @@ public class AccountService {
         rule.setMarcarRevisao(request.marcarRevisao());
         rule.setPrioridade(request.prioridade());
         rule.setAtivo(request.ativo());
+        rule.setClienteId(request.clienteId());
+        rule.setCentroCustoId(request.centroCustoId());
+        rule.setFilialId(request.filialId());
     }
 
     private ChartAccountResponse toResponse(ChartOfAccount a) {
         return new ChartAccountResponse(a.getId(), a.getCodigo(), a.getNome(), a.getTipo(),
-                a.getCategoryId(), a.getParentId());
+                a.getCategoryId(), a.getParentId(), a.getClienteId());
     }
 
     private AccountRuleResponse toResponse(AccountRule r) {
         return new AccountRuleResponse(r.getId(), r.getNome(), r.getDescricaoContains(),
                 r.getValorOperador(), r.getValorRef(), r.getContaId(), r.isMarcarRevisao(),
-                r.getPrioridade(), r.isAtivo());
+                r.getPrioridade(), r.isAtivo(), r.getClienteId(), r.getCentroCustoId(),
+                r.getFilialId());
     }
 }

@@ -1,6 +1,7 @@
 package com.nalitech.modules.account.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.nalitech.modules.account.entity.AccountRule;
@@ -51,7 +52,7 @@ class RuleEngineServiceTest {
     @Test
     void casaPorDescricaoIgnorandoCaixa() {
         AccountRule rule = regra("tarifa", null, null);
-        when(ruleRepository.findByEmpresaIdAndAtivoTrueOrderByPrioridadeDesc(empresaId))
+        when(ruleRepository.findApplicable(any(), any()))
                 .thenReturn(List.of(rule));
 
         var match = ruleEngine.firstMatching(movimento("TARIFA bancaria mensal", null));
@@ -62,7 +63,7 @@ class RuleEngineServiceTest {
     @Test
     void naoCasaQuandoDescricaoNaoContemOTermo() {
         AccountRule rule = regra("pix", null, null);
-        when(ruleRepository.findByEmpresaIdAndAtivoTrueOrderByPrioridadeDesc(empresaId))
+        when(ruleRepository.findApplicable(any(), any()))
                 .thenReturn(List.of(rule));
 
         var match = ruleEngine.firstMatching(movimento("Compra no cartao", null));
@@ -73,7 +74,7 @@ class RuleEngineServiceTest {
     @Test
     void aplicaOperadorDeValorMaiorQue() {
         AccountRule rule = regra(null, "GT", new BigDecimal("100.00"));
-        when(ruleRepository.findByEmpresaIdAndAtivoTrueOrderByPrioridadeDesc(empresaId))
+        when(ruleRepository.findApplicable(any(), any()))
                 .thenReturn(List.of(rule));
 
         assertThat(ruleEngine.firstMatching(movimento("x", new BigDecimal("150.00")))).contains(rule);
@@ -83,7 +84,7 @@ class RuleEngineServiceTest {
     @Test
     void usaValorAbsolutoNaComparacao() {
         AccountRule rule = regra(null, "GT", new BigDecimal("100.00"));
-        when(ruleRepository.findByEmpresaIdAndAtivoTrueOrderByPrioridadeDesc(empresaId))
+        when(ruleRepository.findApplicable(any(), any()))
                 .thenReturn(List.of(rule));
 
         assertThat(ruleEngine.firstMatching(movimento("x", new BigDecimal("-150.00")))).contains(rule);
@@ -93,7 +94,7 @@ class RuleEngineServiceTest {
     void retornaAPrimeiraRegraQueCasaRespeitandoAOrdemRecebida() {
         AccountRule maisPrioritaria = regra("pix", null, null);
         AccountRule menosPrioritaria = regra("pix", null, null);
-        when(ruleRepository.findByEmpresaIdAndAtivoTrueOrderByPrioridadeDesc(empresaId))
+        when(ruleRepository.findApplicable(any(), any()))
                 .thenReturn(List.of(maisPrioritaria, menosPrioritaria));
 
         var match = ruleEngine.firstMatching(movimento("PIX recebido", null));
@@ -103,7 +104,7 @@ class RuleEngineServiceTest {
 
     @Test
     void semRegrasNaoHaMatch() {
-        when(ruleRepository.findByEmpresaIdAndAtivoTrueOrderByPrioridadeDesc(empresaId))
+        when(ruleRepository.findApplicable(any(), any()))
                 .thenReturn(List.of());
 
         assertThat(ruleEngine.firstMatching(movimento("qualquer", null))).isEmpty();

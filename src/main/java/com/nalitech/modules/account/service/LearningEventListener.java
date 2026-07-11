@@ -26,6 +26,7 @@ public class LearningEventListener {
         }
         movementRepository.findById(event.movementId()).ifPresent(movement ->
                 learningService.recordDecision(
-                        event.empresaId(), movement.getDescricao(), event.contaSugerida()));
+                        event.empresaId(), movement.getClienteId(),
+                        movement.getDescricao(), event.contaSugerida()));
     }
 }

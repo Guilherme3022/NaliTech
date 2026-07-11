@@ -9,23 +9,24 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Centro de custo para apropriacao de lancamentos (ex.: Comercial, Tecnologia). */
 @Entity
-@Table(name = "learning_history")
+@Table(name = "cost_centers")
 @Getter
 @Setter
 @NoArgsConstructor
-public class LearningHistory extends TenantEntity {
+public class CostCenter extends TenantEntity {
 
-    @Column(name = "descricao_padrao", nullable = false, length = 200)
-    private String descricaoPadrao;
+    @Column(nullable = false, length = 30)
+    private String codigo;
 
-    @Column(name = "conta_id", nullable = false)
-    private UUID contaId;
+    @Column(nullable = false, length = 120)
+    private String nome;
 
     @Column(nullable = false)
-    private int ocorrencias = 1;
+    private boolean ativo = true;
 
-    // Aprendizado por cliente (Increment 3). null = escopo do escritorio.
+    // null = compartilhado (escritorio); preenchido = especifico do cliente.
     @Column(name = "cliente_id")
     private UUID clienteId;
 }

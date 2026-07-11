@@ -14,11 +14,12 @@ public class CustomExporter extends AbstractLayoutExporter {
     }
 
     @Override
-    public ExportedFile export(List<Movement> movements) {
-        String header = "data,valor,tipo,descricao,documento";
+    public ExportedFile export(List<Movement> movements, ExportContext context) {
+        String header = "data,valor,tipo,debito,credito,centro_custo,filial,descricao,documento";
         String body = movements.stream()
                 .map(m -> String.join(",", data(m), valor(m), tipo(m),
-                        escape(descricao(m)), documento(m)))
+                        debito(m, context), credito(m, context), centroCusto(m, context),
+                        filial(m, context), escape(descricao(m)), documento(m)))
                 .collect(Collectors.joining("\n"));
         return new ExportedFile("export-custom.csv", "text/csv",
                 (header + "\n" + body).getBytes(java.nio.charset.StandardCharsets.UTF_8));

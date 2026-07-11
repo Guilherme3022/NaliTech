@@ -126,6 +126,6 @@ class MatchingServiceTest {
         assertThat(result.getCamada()).isEqualTo("MANUAL");
         assertThat(result.getMatchedMovementId()).isNull();
         assertThat(alvo.getStatus()).isEqualTo(MovementStatus.CONCILIACAO_PENDENTE);
-        verify(eventPublisher, times(1)).publishEvent(any());
+        verify(eventPublisher, times(1)).publishEvent(any(Object.class));
     }
 }

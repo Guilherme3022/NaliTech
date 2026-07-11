@@ -15,22 +15,69 @@ public class ClassificationService {
 
     private final MovementRepository movementRepository;
     private final LearningService learningService;
+    private final DoubleEntryService doubleEntryService;
+    private final RuleEngineService ruleEngineService;
 
     public ClassificationService(MovementRepository movementRepository,
-                                 LearningService learningService) {
+                                 LearningService learningService,
+                                 DoubleEntryService doubleEntryService,
+                                 RuleEngineService ruleEngineService) {
         this.movementRepository = movementRepository;
         this.learningService = learningService;
+        this.doubleEntryService = doubleEntryService;
+        this.ruleEngineService = ruleEngineService;
     }
 
+    /** Classifica pela conta de contrapartida (De/Para) e monta a partida dobrada. */
     public void classify(UUID movementId, UUID contaId) {
         UUID empresaId = SecurityUtils.currentEmpresaId();
         Movement movement = movementRepository.findByIdAndEmpresaId(movementId, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Movimentacao nao encontrada."));
 
         movement.setCategoriaSugerida(contaId);
+        doubleEntryService.applyCounterpart(movement, contaId);
+        // Centro de custo e filial: aplicados automaticamente se a regra que casa os definir.
+        ruleEngineService.firstMatching(movement).ifPresent(rule -> {
+            if (rule.getCentroCustoId() != null) {
+                movement.setCentroCustoId(rule.getCentroCustoId());
+            }
+            if (rule.getFilialId() != null) {
+                movement.setFilialId(rule.getFilialId());
+            }
+        });
         movement.setStatus(MovementStatus.CLASSIFICADO);
         movementRepository.save(movement);
 
-        learningService.recordDecision(empresaId, movement.getDescricao(), contaId);
+        learningService.recordDecision(empresaId, movement.getClienteId(), movement.getDescricao(), contaId);
+    }
+
+    /** Ajuste manual do lancamento: define debito e credito diretamente. */
+    public void setEntry(UUID movementId, UUID contaDebitoId, UUID contaCreditoId) {
+        UUID empresaId = SecurityUtils.currentEmpresaId();
+        Movement movement = movementRepository.findByIdAndEmpresaId(movementId, empresaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Movimentacao nao encontrada."));
+
+        movement.setContaDebitoId(contaDebitoId);
+        movement.setContaCreditoId(contaCreditoId);
+        movement.setStatus(MovementStatus.CLASSIFICADO);
+        movementRepository.save(movement);
+    }
+
+    /** Atribuicao manual de centro de custo a um lancamento. */
+    public void setCostCenter(UUID movementId, UUID centroCustoId) {
+        Movement movement = movementRepository
+                .findByIdAndEmpresaId(movementId, SecurityUtils.currentEmpresaId())
+                .orElseThrow(() -> new ResourceNotFoundException("Movimentacao nao encontrada."));
+        movement.setCentroCustoId(centroCustoId);
+        movementRepository.save(movement);
+    }
+
+    /** Atribuicao manual de filial a um lancamento. */
+    public void setBranch(UUID movementId, UUID filialId) {
+        Movement movement = movementRepository
+                .findByIdAndEmpresaId(movementId, SecurityUtils.currentEmpresaId())
+                .orElseThrow(() -> new ResourceNotFoundException("Movimentacao nao encontrada."));
+        movement.setFilialId(filialId);
+        movementRepository.save(movement);
     }
 }

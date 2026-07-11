@@ -1,6 +1,7 @@
 package com.nalitech.modules.account.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -14,11 +15,13 @@ public final class AccountDtos {
             @NotBlank String nome,
             String tipo,
             UUID categoryId,
-            UUID parentId) {
+            UUID parentId,
+            UUID clienteId) {
     }
 
     public record ChartAccountResponse(
-            UUID id, String codigo, String nome, String tipo, UUID categoryId, UUID parentId) {
+            UUID id, String codigo, String nome, String tipo, UUID categoryId, UUID parentId,
+            UUID clienteId) {
     }
 
     public record AccountRuleRequest(
@@ -29,12 +32,16 @@ public final class AccountDtos {
             UUID contaId,
             boolean marcarRevisao,
             int prioridade,
-            boolean ativo) {
+            boolean ativo,
+            UUID clienteId,
+            UUID centroCustoId,
+            UUID filialId) {
     }
 
     public record AccountRuleResponse(
             UUID id, String nome, String descricaoContains, String valorOperador,
-            BigDecimal valorRef, UUID contaId, boolean marcarRevisao, int prioridade, boolean ativo) {
+            BigDecimal valorRef, UUID contaId, boolean marcarRevisao, int prioridade, boolean ativo,
+            UUID clienteId, UUID centroCustoId, UUID filialId) {
     }
 
     public record SuggestionResponse(
@@ -42,5 +49,68 @@ public final class AccountDtos {
     }
 
     public record ClassifyRequest(UUID contaId) {
+    }
+
+    /** Item da fila de "Solicitação de Parametrização": um padrão ainda sem De/Para. */
+    public record ParametrizationRequest(
+            String descricaoPadrao, String exemplo, long ocorrencias, BigDecimal valorTotal) {
+    }
+
+    /** Aplica um De/Para em lote a todas as movimentações pendentes que casam com o termo. */
+    public record ApplyParametrizationRequest(
+            @NotBlank String descricaoContains,
+            @NotNull UUID contaId,
+            boolean criarRegra) {
+    }
+
+    public record ApplyParametrizationResponse(int classificados, boolean regraCriada) {
+    }
+
+    /** Ajuste manual do lancamento de partida dobrada. */
+    public record ManualEntryRequest(
+            @NotNull UUID contaDebitoId,
+            @NotNull UUID contaCreditoId) {
+    }
+
+    public record BankAccountRequest(
+            @NotBlank String nome,
+            @NotNull UUID contaContabilId,
+            boolean padrao,
+            UUID clienteId) {
+    }
+
+    public record BankAccountResponse(
+            UUID id, String nome, UUID contaContabilId, boolean padrao, UUID clienteId) {
+    }
+
+    /** Atribuição manual de centro de custo a um lançamento. */
+    public record CostCenterAssignRequest(UUID centroCustoId) {
+    }
+
+    public record CostCenterRequest(
+            @NotBlank String codigo,
+            @NotBlank String nome,
+            boolean ativo,
+            UUID clienteId) {
+    }
+
+    public record CostCenterResponse(
+            UUID id, String codigo, String nome, boolean ativo, UUID clienteId) {
+    }
+
+    /** Atribuição manual de filial a um lançamento. */
+    public record BranchAssignRequest(UUID filialId) {
+    }
+
+    public record BranchRequest(
+            @NotBlank String codigo,
+            @NotBlank String nome,
+            String cnpj,
+            boolean ativo,
+            UUID clienteId) {
+    }
+
+    public record BranchResponse(
+            UUID id, String codigo, String nome, String cnpj, boolean ativo, UUID clienteId) {
     }
 }

@@ -16,14 +16,14 @@ public class LearningService {
         this.learningRepository = learningRepository;
     }
 
-    public void recordDecision(UUID empresaId, String descricao, UUID contaId) {
+    public void recordDecision(UUID empresaId, UUID clienteId, String descricao, UUID contaId) {
         if (descricao == null || descricao.isBlank() || contaId == null) {
             return;
         }
         String padrao = normalize(descricao);
         LearningHistory history = learningRepository
-                .findByEmpresaIdAndDescricaoPadrao(empresaId, padrao)
-                .orElseGet(() -> novo(empresaId, padrao, contaId));
+                .findScoped(empresaId, clienteId, padrao)
+                .orElseGet(() -> novo(empresaId, clienteId, padrao, contaId));
 
         if (history.getId() != null && history.getContaId().equals(contaId)) {
             history.setOcorrencias(history.getOcorrencias() + 1);
@@ -35,9 +35,10 @@ public class LearningService {
         learningRepository.save(history);
     }
 
-    private LearningHistory novo(UUID empresaId, String padrao, UUID contaId) {
+    private LearningHistory novo(UUID empresaId, UUID clienteId, String padrao, UUID contaId) {
         LearningHistory history = new LearningHistory();
         history.setEmpresaId(empresaId);
+        history.setClienteId(clienteId);
         history.setDescricaoPadrao(padrao);
         history.setContaId(contaId);
         history.setOcorrencias(0);

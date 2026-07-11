@@ -33,19 +33,21 @@ public class MovementNormalizer {
         this.movementRepository = movementRepository;
     }
 
-    public List<UUID> normalize(UUID uploadId, UUID empresaId, String origem,
+    public List<UUID> normalize(UUID uploadId, UUID empresaId, UUID clienteId, String origem,
                                 List<RawMovement> rawMovements) {
         return rawMovements.stream()
-                .map(raw -> toMovement(uploadId, empresaId, origem, raw))
+                .map(raw -> toMovement(uploadId, empresaId, clienteId, origem, raw))
                 .map(movementRepository::save)
                 .map(Movement::getId)
                 .toList();
     }
 
-    private Movement toMovement(UUID uploadId, UUID empresaId, String origem, RawMovement raw) {
+    private Movement toMovement(UUID uploadId, UUID empresaId, UUID clienteId, String origem,
+                                RawMovement raw) {
         BigDecimal valor = parseValor(raw.valor());
         Movement movement = new Movement();
         movement.setEmpresaId(empresaId);
+        movement.setClienteId(clienteId);
         movement.setUploadId(uploadId);
         movement.setOrigem(origem);
         movement.setData(parseData(raw.data()));

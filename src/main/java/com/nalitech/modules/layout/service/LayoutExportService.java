@@ -5,6 +5,13 @@ import com.nalitech.modules.file.entity.FileEntity;
 import com.nalitech.modules.file.repository.FileRepository;
 import com.nalitech.modules.layout.entity.LayoutExport;
 import com.nalitech.modules.layout.event.ExportacaoGeradaEvent;
+import com.nalitech.modules.account.entity.Branch;
+import com.nalitech.modules.account.entity.ChartOfAccount;
+import com.nalitech.modules.account.entity.CostCenter;
+import com.nalitech.modules.account.repository.BranchRepository;
+import com.nalitech.modules.account.repository.ChartOfAccountRepository;
+import com.nalitech.modules.account.repository.CostCenterRepository;
+import com.nalitech.modules.layout.exporter.ExportContext;
 import com.nalitech.modules.layout.exporter.ExportedFile;
 import com.nalitech.modules.layout.exporter.LayoutExporterFactory;
 import com.nalitech.modules.layout.repository.LayoutExportRepository;
@@ -16,7 +23,9 @@ import com.nalitech.shared.storage.StorageService;
 import com.nalitech.shared.util.HashUtil;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -36,19 +45,28 @@ public class LayoutExportService {
     private final FileRepository fileRepository;
     private final StorageService storageService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ChartOfAccountRepository chartRepository;
+    private final CostCenterRepository costCenterRepository;
+    private final BranchRepository branchRepository;
 
     public LayoutExportService(LayoutExporterFactory exporterFactory,
                                MovementRepository movementRepository,
                                LayoutExportRepository exportRepository,
                                FileRepository fileRepository,
                                StorageService storageService,
-                               ApplicationEventPublisher eventPublisher) {
+                               ApplicationEventPublisher eventPublisher,
+                               ChartOfAccountRepository chartRepository,
+                               CostCenterRepository costCenterRepository,
+                               BranchRepository branchRepository) {
         this.exporterFactory = exporterFactory;
         this.movementRepository = movementRepository;
         this.exportRepository = exportRepository;
         this.fileRepository = fileRepository;
         this.storageService = storageService;
         this.eventPublisher = eventPublisher;
+        this.chartRepository = chartRepository;
+        this.costCenterRepository = costCenterRepository;
+        this.branchRepository = branchRepository;
     }
 
     public List<String> sistemasSuportados() {
@@ -56,17 +74,37 @@ public class LayoutExportService {
     }
 
     @Audited(action = "EXPORTACAO", entity = "LAYOUT")
-    public ExportedFile export(String sistema, LocalDate inicio, LocalDate fim) {
+    public ExportedFile export(String sistema, LocalDate inicio, LocalDate fim, UUID filialId) {
         UUID empresaId = SecurityUtils.currentEmpresaId();
         List<Movement> movements = movementRepository
                 .findByEmpresaIdAndDataBetweenAndStatusIn(empresaId, inicio, fim, EXPORTAVEIS);
+        // Filial: se informada, gera arquivo individual daquela filial; senao, consolidado.
+        if (filialId != null) {
+            movements = movements.stream()
+                    .filter(m -> filialId.equals(m.getFilialId()))
+                    .toList();
+        }
 
-        ExportedFile exported = exporterFactory.resolve(sistema).export(movements);
+        ExportContext context = buildContext(empresaId);
+        ExportedFile exported = exporterFactory.resolve(sistema).export(movements, context);
         UUID fileId = persistFile(empresaId, exported);
         persistExportRecord(empresaId, sistema, inicio, fim, fileId, movements.size());
 
         eventPublisher.publishEvent(new ExportacaoGeradaEvent(empresaId, sistema, inicio, fim, fileId));
         return exported;
+    }
+
+    private ExportContext buildContext(UUID empresaId) {
+        Map<UUID, String> codigosConta = chartRepository.findByEmpresaId(empresaId).stream()
+                .collect(Collectors.toMap(ChartOfAccount::getId, ChartOfAccount::getCodigo,
+                        (existente, novo) -> existente));
+        Map<UUID, String> codigosCentroCusto = costCenterRepository.findByEmpresaId(empresaId).stream()
+                .collect(Collectors.toMap(CostCenter::getId, CostCenter::getCodigo,
+                        (existente, novo) -> existente));
+        Map<UUID, String> codigosFilial = branchRepository.findByEmpresaId(empresaId).stream()
+                .collect(Collectors.toMap(Branch::getId, Branch::getCodigo,
+                        (existente, novo) -> existente));
+        return new ExportContext(codigosConta, codigosCentroCusto, codigosFilial);
     }
 
     @Transactional(readOnly = true)

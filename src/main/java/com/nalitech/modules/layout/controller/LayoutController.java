@@ -5,6 +5,7 @@ import com.nalitech.modules.layout.exporter.ExportedFile;
 import com.nalitech.modules.layout.service.LayoutExportService;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -39,8 +40,9 @@ public class LayoutController {
     public ResponseEntity<byte[]> export(
             @PathVariable String sistema,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim) {
-        ExportedFile file = layoutExportService.export(sistema, inicio, fim);
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim,
+            @RequestParam(required = false) UUID filialId) {
+        ExportedFile file = layoutExportService.export(sistema, inicio, fim, filialId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.filename() + "\"")
                 .contentType(MediaType.parseMediaType(file.contentType()))

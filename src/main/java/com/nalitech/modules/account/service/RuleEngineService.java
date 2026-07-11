@@ -20,7 +20,7 @@ public class RuleEngineService {
 
     public Optional<AccountRule> firstMatching(Movement movement) {
         return ruleRepository
-                .findByEmpresaIdAndAtivoTrueOrderByPrioridadeDesc(movement.getEmpresaId())
+                .findApplicable(movement.getEmpresaId(), movement.getClienteId())
                 .stream()
                 .filter(rule -> matches(rule, movement))
                 .findFirst();

@@ -73,7 +73,8 @@ public class UploadPipelineService {
             ParseResult parseResult = parserFactory.resolve(extension).parse(parserInput);
 
             List<UUID> movementIds = movementNormalizer.normalize(
-                    upload.getId(), event.empresaId(), extension, parseResult.movements());
+                    upload.getId(), event.empresaId(), upload.getClienteId(), extension,
+                    parseResult.movements());
 
             advance(upload, UploadStatus.CONCLUIDO, "NORMALIZACAO");
             eventPublisher.publishEvent(new MovimentacoesNormalizadasEvent(

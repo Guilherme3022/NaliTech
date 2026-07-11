@@ -9,5 +9,5 @@ public interface LayoutExporter {
 
     String sistema();
 
-    ExportedFile export(List<Movement> movements);
+    ExportedFile export(List<Movement> movements, ExportContext context);
 }

@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface MovementRepository extends JpaRepository<Movement, UUID> {
 
@@ -25,4 +27,15 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
                                                            LocalDate fim, List<MovementStatus> statuses);
 
     long countByEmpresaIdAndStatus(UUID empresaId, MovementStatus status);
+
+    // Movimentacoes prontas para classificar, ainda sem De/Para (conta) definido.
+    List<Movement> findByEmpresaIdAndStatusAndCategoriaSugeridaIsNull(UUID empresaId, MovementStatus status);
+
+    // Idem, filtrando por descricao que contem um termo (para aplicar De/Para em lote).
+    @Query("select m from Movement m where m.empresaId = :empresaId and m.status = :status "
+            + "and m.categoriaSugerida is null and m.descricao is not null "
+            + "and lower(m.descricao) like lower(concat('%', :termo, '%'))")
+    List<Movement> findPendingByDescricaoContains(@Param("empresaId") UUID empresaId,
+                                                  @Param("status") MovementStatus status,
+                                                  @Param("termo") String termo);
 }

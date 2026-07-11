@@ -80,6 +80,57 @@ Estrutura contábil e regras de classificação automática.
 **Uso:** cadastre as contas e crie regras (ex.: "descrição contém TARIFA → conta
 X") para classificar movimentações conciliadas automaticamente.
 
+**Escopo por cliente (Increment 3):** contas, regras e contas bancárias podem ser
+**compartilhadas (escritório)** ou **específicas de um cliente**. Na classificação,
+o que é específico do cliente **tem prioridade** sobre o compartilhado (fallback).
+O aprendizado (`learning_history`) também é por cliente. Cada movimentação herda o
+`clienteId` do upload.
+
+### 5.1. Parametrização "De/Para" — `/parametrization`
+A camada que **traduz** o histórico do extrato → conta contábil, ficando cada vez
+mais automática conforme você parametriza.
+- Fila do que **falta mapear**: `GET /parametrization/requests` (padrões
+  conciliados ainda sem conta, agrupados por descrição + contagem + valor total).
+- **Aplicar em lote**: `POST /parametrization/apply` com
+  `{ descricaoContains, contaId, criarRegra }` — classifica todas as pendentes que
+  casam com o termo e, se `criarRegra=true`, cria uma regra permanente (De/Para).
+
+**Classificação automática:** ao conciliar uma movimentação, o sistema tenta
+aplicar a conta sozinho (`AutoClassificationListener`) usando a conta sugerida na
+conciliação ou o motor de sugestão (regra + histórico). Só aplica quando a
+**confiança ≥ 90**; o resto cai na fila de parametrização para revisão humana.
+Quanto mais o contador parametriza, mais o sistema classifica sozinho depois.
+
+### 5.2. Partida dobrada (débito/crédito) — `/bank-accounts`
+Cada movimentação vira um **lançamento contábil de dupla entrada**. A conta do
+De/Para é a **contrapartida**; o outro lado é a **conta bancária**.
+- Convenção: **ENTRADA** → Débito = Banco, Crédito = Contrapartida; **SAÍDA** →
+  Débito = Contrapartida, Crédito = Banco (sem tipo, usa o sinal do valor).
+- Contas bancárias: `GET/POST/PUT/DELETE /bank-accounts` (várias por empresa; a
+  marcada como `padrao` é usada por default). Cada uma liga um banco a uma conta
+  do plano de contas.
+- Ajuste manual do lançamento: `POST /movements/{id}/entry` com
+  `{ contaDebitoId, contaCreditoId }` — quando não for o banco padrão.
+- O **arquivo contábil exportado** agora inclui as colunas **débito/crédito**
+  (código do plano de contas) nos 5 sistemas.
+
+### 5.3. Centro de custo — `/cost-centers` (Increment 4)
+Apropriação de lançamentos a centros de custo (ex.: Comercial, Tecnologia).
+- CRUD `/cost-centers` (escopo por cliente, igual às contas/regras).
+- **Automático**: uma regra De/Para pode definir um centro de custo — ao
+  classificar, se a regra casar, o centro de custo é aplicado sozinho.
+- **Manual**: `POST /movements/{id}/cost-center` `{ centroCustoId }`.
+- O export ganhou a coluna **centro de custo** (código) nos 5 sistemas.
+
+### 5.4. Filiais (matriz/filial) — `/branches` (Increment 5)
+Separação de lançamentos por filial (cada filial tem CNPJ próprio).
+- CRUD `/branches` (escopo por cliente).
+- **Automático**: uma regra De/Para pode definir a filial (aplicada ao classificar).
+- **Manual**: `POST /movements/{id}/branch` `{ filialId }`.
+- **Export por filial**: `POST /layouts/{sistema}/export?filialId=...` gera o arquivo
+  **individual** daquela filial; sem `filialId` gera o **consolidado**. Os 5
+  exporters ganharam a coluna **filial** (código).
+
 ### 6. Exportação (layouts) — `/layouts`
 Gera o arquivo no formato do sistema contábil de destino.
 - Sistemas suportados: `GET /layouts`
@@ -201,6 +252,10 @@ que mais aparece como `MANUAL` e crie regras para esses padrões.
 | Movimentações | `/movements` |
 | Conciliação | `/reconciliations` |
 | Plano de contas / regras | `/chart-of-accounts`, `/account-rules` |
+| Parametrização De/Para | `/parametrization` |
+| Contas bancárias (partida dobrada) | `/bank-accounts` |
+| Centros de custo | `/cost-centers` |
+| Filiais | `/branches` |
 | Exportação | `/layouts` |
 | Agenda fiscal | `/fiscal-obligations` |
 | Financeiro do escritório | `/office` (ver `PAGAMENTOS.md`) |

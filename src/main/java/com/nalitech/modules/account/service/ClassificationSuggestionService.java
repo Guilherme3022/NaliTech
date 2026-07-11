@@ -60,7 +60,7 @@ public class ClassificationSuggestionService {
         if (movement.getDescricao() == null) {
             return Optional.empty();
         }
-        return learningRepository.findByEmpresaId(movement.getEmpresaId()).stream()
+        return learningRepository.findByScope(movement.getEmpresaId(), movement.getClienteId()).stream()
                 .filter(h -> StringSimilarity.ratio(movement.getDescricao(), h.getDescricaoPadrao())
                         >= HISTORY_THRESHOLD)
                 .max((a, b) -> Integer.compare(a.getOcorrencias(), b.getOcorrencias()));

@@ -14,10 +14,12 @@ public class AlterdataExporter extends AbstractLayoutExporter {
     }
 
     @Override
-    public ExportedFile export(List<Movement> movements) {
-        String header = "DATA;VALOR;TIPO;HISTORICO;DOCUMENTO";
+    public ExportedFile export(List<Movement> movements, ExportContext context) {
+        String header = "DATA;VALOR;TIPO;DEBITO;CREDITO;CENTRO_CUSTO;FILIAL;HISTORICO;DOCUMENTO";
         String body = movements.stream()
-                .map(m -> String.join(";", data(m), valor(m), tipo(m), descricao(m), documento(m)))
+                .map(m -> String.join(";", data(m), valor(m), tipo(m),
+                        debito(m, context), credito(m, context), centroCusto(m, context),
+                        filial(m, context), descricao(m), documento(m)))
                 .collect(Collectors.joining("\n"));
         return text("export-alterdata.csv", header + "\n" + body);
     }

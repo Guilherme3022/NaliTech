@@ -40,4 +40,16 @@ public class AccountRule extends TenantEntity {
 
     @Column(nullable = false)
     private boolean ativo = true;
+
+    // null = regra compartilhada (escritorio); preenchido = especifica do cliente.
+    @Column(name = "cliente_id")
+    private UUID clienteId;
+
+    // Centro de custo opcional aplicado quando a regra casa (Increment 4).
+    @Column(name = "centro_custo_id")
+    private UUID centroCustoId;
+
+    // Filial opcional aplicada quando a regra casa (Increment 5).
+    @Column(name = "filial_id")
+    private UUID filialId;
 }

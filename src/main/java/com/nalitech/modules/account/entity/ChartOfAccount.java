@@ -30,4 +30,8 @@ public class ChartOfAccount extends TenantEntity {
 
     @Column(name = "parent_id")
     private UUID parentId;
+
+    // null = conta compartilhada (escritorio); preenchido = especifica do cliente.
+    @Column(name = "cliente_id")
+    private UUID clienteId;
 }

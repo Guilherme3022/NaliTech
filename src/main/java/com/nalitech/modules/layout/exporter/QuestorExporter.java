@@ -14,9 +14,11 @@ public class QuestorExporter extends AbstractLayoutExporter {
     }
 
     @Override
-    public ExportedFile export(List<Movement> movements) {
+    public ExportedFile export(List<Movement> movements, ExportContext context) {
         String content = movements.stream()
-                .map(m -> String.join("\t", data(m), valor(m), tipo(m), descricao(m), documento(m)))
+                .map(m -> String.join("\t", data(m), valor(m), tipo(m),
+                        debito(m, context), credito(m, context), centroCusto(m, context),
+                        filial(m, context), descricao(m), documento(m)))
                 .collect(Collectors.joining("\n"));
         return text("export-questor.txt", content);
     }
