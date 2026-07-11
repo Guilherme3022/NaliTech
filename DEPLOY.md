@@ -62,15 +62,35 @@ curl -X POST http://localhost:8080/auth/login \
 | OCR (Tesseract) | ⚠️ depende do ambiente | precisa do binário + `tessdata` na máquina/imagem. Sem ele, PDF escaneado/imagem degrada (confiança baixa) sem quebrar o fluxo. Ver seção 4. |
 | Gateway de pagamento | ⚠️ simulado | provedor padrão `SIMULADO`. Para cobrança real, configurar `ASAAS_API_TOKEN` (E12). |
 | E-mail real | ⚪ opcional | em dev vai para o Mailpit. Em produção, apontar `MAIL_*` para um SMTP (ex: Resend/SendGrid). |
-| Frontend | ❌ fora deste repo | este repositório é só o backend. |
+| Frontend | ✅ repo separado | fica em `../LedgerFlowFront` (React + Vite). Deploy coberto na seção 3.5. |
 
 ---
 
-## 3. Subir online de graça (trilha do `01-infra.md`)
+## 3. Subir o sistema todo online de graça (trilha do `01-infra.md`)
+
+> Aqui o objetivo é colocar **backend + frontend** no ar sem custo. A arquitetura
+> final fica assim:
+>
+> ```
+>   [ Navegador do usuário ]
+>            │  HTTPS
+>            ▼
+>   [ Frontend estático ]  ──── chamadas /api ───►  [ Backend Spring Boot ]
+>   (Vercel / Netlify /                                (Railway / Render)
+>    Cloudflare Pages)                                     │        │
+>                                                          ▼        ▼
+>                                                   [ Neon Postgres ] [ R2 storage ]
+> ```
+>
+> Ordem recomendada: **(1) banco → (2) storage → (3) backend → (4) frontend**.
+> O frontend precisa da URL pública do backend, e o backend precisa liberar o
+> domínio do frontend no CORS — por isso eles são os dois últimos passos e se
+> "apontam" um para o outro no final.
 
 O backend é um container Spring Boot que lê **tudo de variáveis de ambiente** —
 então o deploy é: escolher onde rodar o container + um Postgres gerenciado + um
-storage S3-compatible. Redis/RabbitMQ podem ficar de fora no MVP.
+storage S3-compatible. Redis/RabbitMQ podem ficar de fora no MVP. O frontend é um
+build estático (HTML/CSS/JS) — vai em qualquer host de site estático grátis.
 
 ### Passo a passo (o que **você** precisa fazer)
 
@@ -97,12 +117,17 @@ storage S3-compatible. Redis/RabbitMQ podem ficar de fora no MVP.
    - Como você provavelmente **não** terá Redis/RabbitMQ, defina:
      `REDIS_HEALTH_ENABLED=false` e `RABBIT_HEALTH_ENABLED=false`
      (senão o health fica DOWN e a plataforma marca o serviço como não saudável).
+4. Anote a **URL pública** que a plataforma gera (ex:
+   `https://ledgerflow-api.up.railway.app`). Você vai precisar dela no passo 3.5
+   (frontend) e no `CORS_ALLOWED_ORIGINS`.
 
 **d) Variáveis de segurança obrigatórias em produção**
 - `JWT_SECRET` = segredo forte com **no mínimo 32 caracteres**.
 - `LEDGERFLOW_ENCRYPTION_KEY` = **exatamente 32 caracteres** (senão o app não sobe).
 - `DEFAULT_ADMIN_PASSWORD` = troque o padrão.
-- `CORS_ALLOWED_ORIGINS` = domínio do seu frontend (ex: `https://app.seudominio.com.br`).
+- `CORS_ALLOWED_ORIGINS` = domínio do seu frontend (ex: `https://ledgerflow.vercel.app`).
+  Você só vai saber esse valor depois do passo 3.5 — pode deixar provisório e
+  voltar aqui para ajustar (ver 3.6).
 
 **e) (Opcional) DNS/HTTPS — Cloudflare**
 - Aponte um subdomínio (ex: `api.seudominio.com.br`) para o serviço do Railway/Render.
@@ -113,9 +138,49 @@ storage S3-compatible. Redis/RabbitMQ podem ficar de fora no MVP.
   o mais simples é deixar desativado.
 - Fila → CloudAMQP (free "Little Lemur"), só se migrar o pipeline para fila real.
 
+### 3.5. Frontend — Vercel (ou Netlify / Cloudflare Pages), free
+
+O frontend fica no repositório irmão `../LedgerFlowFront` (React + Vite). Ele
+é só arquivos estáticos — qualquer host de site estático serve. Passos na Vercel:
+
+1. **Suba `../LedgerFlowFront` para o GitHub** (é um repo git próprio).
+2. Na Vercel, **New Project → importe esse repositório**. Ela detecta o Vite sozinha:
+   - Build command: `npm run build`
+   - Output directory: `dist`
+   - (já há um `vercel.json` no repo que faz o *fallback* de rotas do React
+     Router para `index.html` — sem ele, dar F5 numa rota interna daria 404.)
+3. Em **Settings → Environment Variables**, crie:
+   - `VITE_API_BASE_URL` = a **URL pública do backend** do passo (c), ex:
+     `https://ledgerflow-api.up.railway.app`
+   > ⚠️ O Vite embute variáveis `VITE_*` no bundle **em tempo de build**. Se você
+   > mudar essa variável depois, precisa **refazer o deploy** (redeploy) para valer.
+4. Deploy. A Vercel gera a URL pública (ex: `https://ledgerflow.vercel.app`).
+
+> **Alternativa Docker + nginx (Railway/Render):** o frontend também tem
+> `Dockerfile` + `nginx.conf`. Nesse caso a URL da API entra como **build arg**:
+> `--build-arg VITE_API_BASE_URL=https://sua-api...`. Em Railway/Render, configure
+> esse build arg na plataforma. O nginx já faz o fallback de SPA para `index.html`.
+
+### 3.6. Ligar os dois (o passo que todo mundo esquece)
+
+Depois que o frontend tem URL pública, volte no **backend** e ajuste o CORS:
+
+- `CORS_ALLOWED_ORIGINS=https://ledgerflow.vercel.app`
+  (o domínio exato do frontend, com `https://`, sem barra no final; vários
+  domínios podem ser separados por vírgula).
+
+Reinicie/redeploy o backend para aplicar. Sem isso, o navegador **bloqueia** as
+chamadas do frontend com erro de CORS, mesmo com o backend no ar.
+
+Como o frontend chama a API pela URL absoluta (`VITE_API_BASE_URL`), **não** existe
+proxy em produção (o proxy `/api → localhost:8080` do `vite.config.ts` só vale em
+desenvolvimento). Por isso o CORS no backend é obrigatório em produção.
+
 ### Resumo mínimo para o MVP online
-**Railway/Render (backend) + Neon (Postgres) + R2 (storage)** — com
-`REDIS_HEALTH_ENABLED=false` e `RABBIT_HEALTH_ENABLED=false`. Custo ≈ R$ 0.
+**Neon (Postgres) + R2 (storage) + Railway/Render (backend) + Vercel (frontend)** —
+com `REDIS_HEALTH_ENABLED=false`, `RABBIT_HEALTH_ENABLED=false`,
+`VITE_API_BASE_URL` apontando pro backend e `CORS_ALLOWED_ORIGINS` apontando pro
+frontend. Custo ≈ R$ 0.
 
 ---
 
@@ -129,10 +194,23 @@ não é necessário — o pipeline funciona sem ele.
 ---
 
 ## 5. Checklist rápido de go-live
+
+**Backend**
 - [ ] `DB_URL/DB_USER/DB_PASSWORD` (Neon, com `sslmode=require`)
 - [ ] `STORAGE_*` (R2, bucket criado)
 - [ ] `JWT_SECRET` forte (≥32) e `LEDGERFLOW_ENCRYPTION_KEY` (=32)
 - [ ] `DEFAULT_ADMIN_PASSWORD` trocado
-- [ ] `CORS_ALLOWED_ORIGINS` = domínio do frontend
+- [ ] `CORS_ALLOWED_ORIGINS` = domínio do frontend (preenchido após o deploy do front)
 - [ ] `REDIS_HEALTH_ENABLED=false`, `RABBIT_HEALTH_ENABLED=false` (se sem esses serviços)
 - [ ] Health check da plataforma → `/actuator/health`
+- [ ] URL pública da API anotada
+
+**Frontend** (`../LedgerFlowFront`)
+- [ ] Repo no GitHub e importado na Vercel (ou host estático equivalente)
+- [ ] `VITE_API_BASE_URL` = URL pública da API
+- [ ] Redeploy feito **depois** de setar/alterar `VITE_API_BASE_URL`
+- [ ] URL pública do front colocada no `CORS_ALLOWED_ORIGINS` do backend (e backend reiniciado)
+
+**Fumça final**
+- [ ] Abrir o front, logar com o admin, ver o Dashboard carregar sem erro de CORS/401
+- [ ] Fazer um upload de teste e ver o status atualizar
