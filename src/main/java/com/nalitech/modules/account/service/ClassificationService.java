@@ -1,5 +1,7 @@
 package com.nalitech.modules.account.service;
 
+import com.nalitech.modules.account.entity.LoanContract;
+import com.nalitech.modules.account.repository.LoanContractRepository;
 import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.modules.movement.entity.MovementStatus;
 import com.nalitech.modules.movement.repository.MovementRepository;
@@ -17,15 +19,18 @@ public class ClassificationService {
     private final LearningService learningService;
     private final DoubleEntryService doubleEntryService;
     private final RuleEngineService ruleEngineService;
+    private final LoanContractRepository loanContractRepository;
 
     public ClassificationService(MovementRepository movementRepository,
                                  LearningService learningService,
                                  DoubleEntryService doubleEntryService,
-                                 RuleEngineService ruleEngineService) {
+                                 RuleEngineService ruleEngineService,
+                                 LoanContractRepository loanContractRepository) {
         this.movementRepository = movementRepository;
         this.learningService = learningService;
         this.doubleEntryService = doubleEntryService;
         this.ruleEngineService = ruleEngineService;
+        this.loanContractRepository = loanContractRepository;
     }
 
     /** Classifica pela conta de contrapartida (De/Para) e monta a partida dobrada. */
@@ -78,6 +83,28 @@ public class ClassificationService {
                 .findByIdAndEmpresaId(movementId, SecurityUtils.currentEmpresaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Movimentacao nao encontrada."));
         movement.setFilialId(filialId);
+        movementRepository.save(movement);
+    }
+
+    /**
+     * Vincula o lancamento a um contrato de financiamento. Se o contrato tiver conta
+     * de principal, ja classifica o lancamento nela (o contador ajusta se for juros/encargo).
+     */
+    public void setLoanContract(UUID movementId, UUID loanContractId) {
+        UUID empresaId = SecurityUtils.currentEmpresaId();
+        Movement movement = movementRepository.findByIdAndEmpresaId(movementId, empresaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Movimentacao nao encontrada."));
+        movement.setLoanContractId(loanContractId);
+
+        if (loanContractId != null) {
+            LoanContract contract = loanContractRepository.findByIdAndEmpresaId(loanContractId, empresaId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Contrato nao encontrado."));
+            if (contract.getContaPrincipalId() != null) {
+                movement.setCategoriaSugerida(contract.getContaPrincipalId());
+                doubleEntryService.applyCounterpart(movement, contract.getContaPrincipalId());
+                movement.setStatus(MovementStatus.CLASSIFICADO);
+            }
+        }
         movementRepository.save(movement);
     }
 }

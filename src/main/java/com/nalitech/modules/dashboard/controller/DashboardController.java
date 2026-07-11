@@ -1,7 +1,9 @@
 package com.nalitech.modules.dashboard.controller;
 
 import com.nalitech.modules.dashboard.dto.DashboardDtos.DashboardActivity;
+import com.nalitech.modules.dashboard.dto.DashboardDtos.DashboardPortfolio;
 import com.nalitech.modules.dashboard.dto.DashboardDtos.DashboardSummary;
+import com.nalitech.modules.dashboard.dto.DashboardDtos.OperationSummary;
 import com.nalitech.modules.dashboard.service.DashboardService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,5 +29,15 @@ public class DashboardController {
     @GetMapping("/activity")
     public DashboardActivity activity() {
         return dashboardService.activity();
+    }
+
+    @GetMapping("/operation")
+    public OperationSummary operation() {
+        return dashboardService.operation();
+    }
+
+    @GetMapping("/portfolio")
+    public DashboardPortfolio portfolio() {
+        return dashboardService.portfolio();
     }
 }

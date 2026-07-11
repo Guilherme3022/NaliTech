@@ -111,6 +111,9 @@ public class AccountService {
         rule.setClienteId(request.clienteId());
         rule.setCentroCustoId(request.centroCustoId());
         rule.setFilialId(request.filialId());
+        rule.setTipoMovimento(request.tipoMovimento());
+        rule.setBancoContains(request.bancoContains());
+        rule.setDocumentoContains(request.documentoContains());
     }
 
     private ChartAccountResponse toResponse(ChartOfAccount a) {
@@ -122,6 +125,6 @@ public class AccountService {
         return new AccountRuleResponse(r.getId(), r.getNome(), r.getDescricaoContains(),
                 r.getValorOperador(), r.getValorRef(), r.getContaId(), r.isMarcarRevisao(),
                 r.getPrioridade(), r.isAtivo(), r.getClienteId(), r.getCentroCustoId(),
-                r.getFilialId());
+                r.getFilialId(), r.getTipoMovimento(), r.getBancoContains(), r.getDocumentoContains());
     }
 }

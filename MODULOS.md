@@ -80,6 +80,10 @@ Estrutura contábil e regras de classificação automática.
 **Uso:** cadastre as contas e crie regras (ex.: "descrição contém TARIFA → conta
 X") para classificar movimentações conciliadas automaticamente.
 
+**Critérios da regra (Increment 6):** além de descrição e valor, a regra pode
+filtrar por **tipo** (entrada/saída), **banco** e **documento/código** — todos
+opcionais e combinados (E). Uma regra também define conta, centro de custo e filial.
+
 **Escopo por cliente (Increment 3):** contas, regras e contas bancárias podem ser
 **compartilhadas (escritório)** ou **específicas de um cliente**. Na classificação,
 o que é específico do cliente **tem prioridade** sobre o compartilhado (fallback).
@@ -100,6 +104,18 @@ aplicar a conta sozinho (`AutoClassificationListener`) usando a conta sugerida n
 conciliação ou o motor de sugestão (regra + histórico). Só aplica quando a
 **confiança ≥ 90**; o resto cai na fila de parametrização para revisão humana.
 Quanto mais o contador parametriza, mais o sistema classifica sozinho depois.
+
+**IA plugável (Increment 9):** a sugestão de conta usa um provedor selecionável
+(`AI_PROVIDER`): **HEURISTICA** (histórico, grátis — padrão) ou **IA** (LLM real,
+compatível com a API da OpenAI/Groq/Ollama). A ordem é regra → IA → histórico →
+manual, com fallback automático. Custos e configuração: ver `DEPLOY.md` seção 5.
+
+### 5.6. Layouts de importação — `/import-layouts` (Increment 9)
+Builder que mapeia as **colunas** de um CSV/planilha de origem para os campos do
+sistema (data, valor, descrição, documento), por cliente.
+- CRUD `/import-layouts`.
+- **Preview ao vivo**: `POST /import-layouts/preview` aplica o mapeamento a um CSV
+  colado e devolve as linhas mapeadas (para testar antes de salvar).
 
 ### 5.2. Partida dobrada (débito/crédito) — `/bank-accounts`
 Cada movimentação vira um **lançamento contábil de dupla entrada**. A conta do
@@ -131,10 +147,22 @@ Separação de lançamentos por filial (cada filial tem CNPJ próprio).
   **individual** daquela filial; sem `filialId` gera o **consolidado**. Os 5
   exporters ganharam a coluna **filial** (código).
 
+### 5.5. Financiamentos/empréstimos — `/loan-contracts` (Increment 7)
+Cadastro de contratos com contas de **principal, juros e encargos** + classificação
+**curto/longo prazo** (escopo por cliente).
+- CRUD `/loan-contracts`.
+- **Vincular lançamento ao contrato**: `POST /movements/{id}/loan-contract`
+  `{ loanContractId }` — já classifica o lançamento na conta de **principal**
+  (ajuste manual de débito/crédito se for juros/encargo).
+- *Refinamento futuro*: split automático principal-vs-juros por parcela (motor de
+  amortização) — ainda não implementado.
+
 ### 6. Exportação (layouts) — `/layouts`
 Gera o arquivo no formato do sistema contábil de destino.
 - Sistemas suportados: `GET /layouts`
-- Exportar: `POST /layouts/{sistema}/export`
+- Exportar: `POST /layouts/{sistema}/export` (opcional `?filialId=` para arquivo individual)
+- **Validação pré-export** (Increment 6): `GET /layouts/validation?inicio&fim[&filialId]` —
+  lista lançamentos incompletos (sem débito/crédito) antes de gerar o arquivo.
 - Histórico: `GET /layouts/exports/history`
 
 **Uso:** após conciliar e classificar, exporte para o layout do sistema que o
@@ -256,6 +284,8 @@ que mais aparece como `MANUAL` e crie regras para esses padrões.
 | Contas bancárias (partida dobrada) | `/bank-accounts` |
 | Centros de custo | `/cost-centers` |
 | Filiais | `/branches` |
+| Financiamentos/empréstimos | `/loan-contracts` |
+| Layouts de importação | `/import-layouts` |
 | Exportação | `/layouts` |
 | Agenda fiscal | `/fiscal-obligations` |
 | Financeiro do escritório | `/office` (ver `PAGAMENTOS.md`) |

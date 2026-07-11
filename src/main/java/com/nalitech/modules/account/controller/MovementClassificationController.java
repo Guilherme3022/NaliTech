@@ -3,6 +3,7 @@ package com.nalitech.modules.account.controller;
 import com.nalitech.modules.account.dto.AccountDtos.BranchAssignRequest;
 import com.nalitech.modules.account.dto.AccountDtos.ClassifyRequest;
 import com.nalitech.modules.account.dto.AccountDtos.CostCenterAssignRequest;
+import com.nalitech.modules.account.dto.AccountDtos.LoanContractAssignRequest;
 import com.nalitech.modules.account.dto.AccountDtos.ManualEntryRequest;
 import com.nalitech.modules.account.dto.AccountDtos.SuggestionResponse;
 import jakarta.validation.Valid;
@@ -66,5 +67,12 @@ public class MovementClassificationController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setBranch(@PathVariable UUID id, @RequestBody BranchAssignRequest request) {
         classificationService.setBranch(id, request.filialId());
+    }
+
+    /** Vincula o lancamento a um contrato de financiamento (Increment 7). */
+    @PostMapping("/{id}/loan-contract")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setLoanContract(@PathVariable UUID id, @RequestBody LoanContractAssignRequest request) {
+        classificationService.setLoanContract(id, request.loanContractId());
     }
 }

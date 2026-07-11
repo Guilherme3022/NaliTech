@@ -52,4 +52,14 @@ public class AccountRule extends TenantEntity {
     // Filial opcional aplicada quando a regra casa (Increment 5).
     @Column(name = "filial_id")
     private UUID filialId;
+
+    // Criterios adicionais (Increment 6). Todos opcionais (null = nao filtra).
+    @Column(name = "tipo_movimento", length = 10)
+    private String tipoMovimento; // ENTRADA | SAIDA
+
+    @Column(name = "banco_contains", length = 120)
+    private String bancoContains;
+
+    @Column(name = "documento_contains", length = 120)
+    private String documentoContains;
 }

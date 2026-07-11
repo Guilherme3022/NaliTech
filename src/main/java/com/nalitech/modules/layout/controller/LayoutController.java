@@ -1,5 +1,6 @@
 package com.nalitech.modules.layout.controller;
 
+import com.nalitech.modules.layout.dto.LayoutDtos.ExportValidationReport;
 import com.nalitech.modules.layout.entity.LayoutExport;
 import com.nalitech.modules.layout.exporter.ExportedFile;
 import com.nalitech.modules.layout.service.LayoutExportService;
@@ -47,6 +48,14 @@ public class LayoutController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.filename() + "\"")
                 .contentType(MediaType.parseMediaType(file.contentType()))
                 .body(file.content());
+    }
+
+    @GetMapping("/validation")
+    public ExportValidationReport validate(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim,
+            @RequestParam(required = false) UUID filialId) {
+        return layoutExportService.validate(inicio, fim, filialId);
     }
 
     @GetMapping("/exports/history")

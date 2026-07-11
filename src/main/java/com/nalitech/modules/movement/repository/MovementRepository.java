@@ -28,6 +28,14 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
 
     long countByEmpresaIdAndStatus(UUID empresaId, MovementStatus status);
 
+    // Dashboard (Increment 8): aguardando classificacao/parametrizacao.
+    long countByEmpresaIdAndStatusAndCategoriaSugeridaIsNull(UUID empresaId, MovementStatus status);
+
+    long countByEmpresaIdAndClienteIdAndStatus(UUID empresaId, UUID clienteId, MovementStatus status);
+
+    long countByEmpresaIdAndClienteIdAndStatusAndCategoriaSugeridaIsNull(
+            UUID empresaId, UUID clienteId, MovementStatus status);
+
     // Movimentacoes prontas para classificar, ainda sem De/Para (conta) definido.
     List<Movement> findByEmpresaIdAndStatusAndCategoriaSugeridaIsNull(UUID empresaId, MovementStatus status);
 

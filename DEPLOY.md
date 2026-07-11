@@ -237,7 +237,65 @@ não é necessário — o pipeline funciona sem ele.
 
 ---
 
-## 5. Checklist rápido de go-live
+## 5. IA — sugestão automática de conta contábil
+
+O Nalitech sugere a conta contábil de cada movimentação. São **dois modos**,
+escolhidos pela variável `AI_PROVIDER`:
+
+| Modo | `AI_PROVIDER` | Como funciona | Custo |
+|---|---|---|---|
+| **Heurística** (padrão) | `HEURISTICA` | Aprende com o histórico de decisões do contador (descrições semelhantes já classificadas). Determinística. | **US$ 0** |
+| **IA (LLM)** | `IA` | Envia a descrição + o plano de contas a um modelo de linguagem, que escolhe a conta. | pago por uso (ver abaixo) |
+
+> **A ordem é sempre:** regra explícita → (IA, se ligada) → histórico → manual.
+> Se `AI_PROVIDER=IA` mas a `AI_API_KEY` estiver vazia ou a chamada falhar, o
+> sistema **cai automaticamente na heurística** (nunca quebra o fluxo).
+
+### 5.1. Como ligar a IA
+
+No `.env`/ambiente do backend:
+
+```env
+AI_PROVIDER=IA
+AI_API_URL=https://api.openai.com/v1     # endpoint compativel com a API da OpenAI
+AI_API_KEY=sk-...                        # sua chave (NUNCA commitar)
+AI_MODEL=gpt-4o-mini                     # modelo barato e bom para classificar
+```
+
+O cliente usa o **formato da API da OpenAI** (`/chat/completions`), então funciona
+com vários provedores — basta trocar `AI_API_URL`/`AI_MODEL`:
+
+| Provedor | `AI_API_URL` | Observação |
+|---|---|---|
+| **OpenAI** | `https://api.openai.com/v1` | `gpt-4o-mini` é barato e suficiente |
+| **Groq** | `https://api.groq.com/openai/v1` | tem tier gratuito generoso; modelos Llama |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | agrega vários modelos (alguns free) |
+| **Ollama (self-host)** | `http://localhost:11434/v1` | roda local, **custo zero**, sem enviar dados p/ fora |
+
+### 5.2. Quanto custa (ordem de grandeza)
+
+> Preços mudam; confirme no provedor. Referência (meados de 2025) para o
+> `gpt-4o-mini`: ~US$ 0,15 por 1M tokens de entrada e ~US$ 0,60 por 1M de saída.
+
+Cada sugestão manda a descrição do lançamento + o plano de contas (limitado a 200
+contas) → algo como **1–3 mil tokens de entrada** e pouquíssimos de saída (só o
+código). Ou seja, ~**US$ 0,0003–0,0005 por sugestão** no gpt-4o-mini.
+
+Pontos que **reduzem muito** o custo real:
+- A IA só é chamada quando **não há regra nem histórico** que resolva. Conforme o
+  contador parametriza, a maioria passa a ser resolvida de graça (regra/histórico)
+  e a IA quase não é acionada.
+- Para um escritório de ~20 clientes, isso costuma dar **poucos dólares/mês** — e
+  **US$ 0** se usar Groq (free tier) ou Ollama (local).
+
+**Recomendação:** comece em `HEURISTICA` (grátis e já aprende sozinho). Ligue a
+IA só se quiser acelerar a parametrização inicial de clientes novos; e considere
+**Groq/Ollama** para não ter custo. Avalie também privacidade: enviar descrições
+de extratos a um LLM externo pode ser sensível — Ollama (local) evita isso.
+
+---
+
+## 6. Checklist rápido de go-live
 
 **Backend**
 - [ ] `DB_URL/DB_USER/DB_PASSWORD` (Neon, com `sslmode=require`)

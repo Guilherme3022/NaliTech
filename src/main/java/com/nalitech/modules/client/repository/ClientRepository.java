@@ -1,6 +1,8 @@
 package com.nalitech.modules.client.repository;
 
 import com.nalitech.modules.client.entity.Client;
+import com.nalitech.modules.client.entity.ClientStatus;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -12,6 +14,10 @@ import org.springframework.data.repository.query.Param;
 public interface ClientRepository extends JpaRepository<Client, UUID> {
 
     Optional<Client> findByIdAndEmpresaId(UUID id, UUID empresaId);
+
+    long countByEmpresaIdAndStatus(UUID empresaId, ClientStatus status);
+
+    List<Client> findByEmpresaIdAndStatus(UUID empresaId, ClientStatus status);
 
     @Query("""
             select c from Client c

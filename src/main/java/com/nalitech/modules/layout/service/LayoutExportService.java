@@ -3,6 +3,8 @@ package com.nalitech.modules.layout.service;
 import com.nalitech.modules.audit.Audited;
 import com.nalitech.modules.file.entity.FileEntity;
 import com.nalitech.modules.file.repository.FileRepository;
+import com.nalitech.modules.layout.dto.LayoutDtos.ExportIssue;
+import com.nalitech.modules.layout.dto.LayoutDtos.ExportValidationReport;
 import com.nalitech.modules.layout.entity.LayoutExport;
 import com.nalitech.modules.layout.event.ExportacaoGeradaEvent;
 import com.nalitech.modules.account.entity.Branch;
@@ -92,6 +94,35 @@ public class LayoutExportService {
 
         eventPublisher.publishEvent(new ExportacaoGeradaEvent(empresaId, sistema, inicio, fim, fileId));
         return exported;
+    }
+
+    /** Valida os lancamentos do periodo antes de exportar (partida dobrada incompleta). */
+    @Transactional(readOnly = true)
+    public ExportValidationReport validate(LocalDate inicio, LocalDate fim, UUID filialId) {
+        UUID empresaId = SecurityUtils.currentEmpresaId();
+        List<Movement> movements = movementRepository
+                .findByEmpresaIdAndDataBetweenAndStatusIn(empresaId, inicio, fim, EXPORTAVEIS);
+        if (filialId != null) {
+            movements = movements.stream().filter(m -> filialId.equals(m.getFilialId())).toList();
+        }
+        List<ExportIssue> problemas = movements.stream()
+                .map(this::validar)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        return new ExportValidationReport(movements.size(), problemas.size(), problemas);
+    }
+
+    private ExportIssue validar(Movement m) {
+        String motivo = null;
+        if (m.getContaDebitoId() == null && m.getContaCreditoId() == null) {
+            motivo = "Lancamento sem conta contabil (nao classificado / sem De/Para).";
+        } else if (m.getContaDebitoId() == null) {
+            motivo = "Lancamento sem conta de debito.";
+        } else if (m.getContaCreditoId() == null) {
+            motivo = "Lancamento sem conta de credito.";
+        }
+        return motivo == null ? null
+                : new ExportIssue(m.getId(), m.getData(), m.getValor(), m.getDescricao(), motivo);
     }
 
     private ExportContext buildContext(UUID empresaId) {

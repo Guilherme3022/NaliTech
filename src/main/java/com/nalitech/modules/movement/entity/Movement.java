@@ -66,6 +66,10 @@ public class Movement extends TenantEntity {
     @Column(name = "filial_id")
     private UUID filialId;
 
+    // Contrato de financiamento vinculado (Increment 7).
+    @Column(name = "loan_contract_id")
+    private UUID loanContractId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 25)
     private MovementStatus status = MovementStatus.NORMALIZADO;

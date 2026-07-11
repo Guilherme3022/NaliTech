@@ -27,7 +27,36 @@ public class RuleEngineService {
     }
 
     private boolean matches(AccountRule rule, Movement movement) {
-        return descricaoMatches(rule, movement) && valorMatches(rule, movement);
+        return descricaoMatches(rule, movement)
+                && valorMatches(rule, movement)
+                && tipoMatches(rule, movement)
+                && bancoMatches(rule, movement)
+                && documentoMatches(rule, movement);
+    }
+
+    private boolean tipoMatches(AccountRule rule, Movement movement) {
+        if (rule.getTipoMovimento() == null || rule.getTipoMovimento().isBlank()) {
+            return true;
+        }
+        return movement.getTipo() != null
+                && rule.getTipoMovimento().equalsIgnoreCase(movement.getTipo().name());
+    }
+
+    private boolean bancoMatches(AccountRule rule, Movement movement) {
+        if (rule.getBancoContains() == null || rule.getBancoContains().isBlank()) {
+            return true;
+        }
+        return movement.getBanco() != null
+                && movement.getBanco().toLowerCase().contains(rule.getBancoContains().toLowerCase());
+    }
+
+    private boolean documentoMatches(AccountRule rule, Movement movement) {
+        if (rule.getDocumentoContains() == null || rule.getDocumentoContains().isBlank()) {
+            return true;
+        }
+        return movement.getDocumento() != null
+                && movement.getDocumento().toLowerCase()
+                    .contains(rule.getDocumentoContains().toLowerCase());
     }
 
     private boolean descricaoMatches(AccountRule rule, Movement movement) {

@@ -26,4 +26,24 @@ public final class DashboardDtos {
 
     public record DashboardActivity(List<ActivityItem> recentes) {
     }
+
+    /** Visao operacional do escritorio (Increment 8). */
+    public record OperationSummary(
+            long clientesAtivos,
+            long conciliacoesPendentes,
+            long aguardandoClassificacao,
+            long uploadsProcessando,
+            long uploadsComErro) {
+    }
+
+    /** Situacao de um cliente na carteira. */
+    public record PortfolioItem(
+            UUID clienteId,
+            String nome,
+            long pendentesConciliacao,
+            long aguardandoClassificacao) {
+    }
+
+    public record DashboardPortfolio(List<PortfolioItem> clientes) {
+    }
 }

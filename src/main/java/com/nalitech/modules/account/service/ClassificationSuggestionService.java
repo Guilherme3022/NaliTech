@@ -1,40 +1,48 @@
 package com.nalitech.modules.account.service;
 
+import com.nalitech.modules.account.ai.AiSuggestionProvider;
+import com.nalitech.modules.account.ai.AiSuggestionProvider.SuggestedAccount;
+import com.nalitech.modules.account.ai.SuggestionProviderSelector;
 import com.nalitech.modules.account.entity.AccountRule;
 import com.nalitech.modules.account.entity.AiSuggestion;
-import com.nalitech.modules.account.entity.LearningHistory;
+import com.nalitech.modules.account.entity.ChartOfAccount;
 import com.nalitech.modules.account.repository.AiSuggestionRepository;
-import com.nalitech.modules.account.repository.LearningHistoryRepository;
+import com.nalitech.modules.account.repository.ChartOfAccountRepository;
 import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.modules.movement.repository.MovementRepository;
 import com.nalitech.security.SecurityUtils;
 import com.nalitech.shared.exception.ResourceNotFoundException;
-import com.nalitech.shared.util.StringSimilarity;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Sugere a conta contabil de uma movimentacao: primeiro por regra explicita
+ * (deterministica), depois pelo provedor de sugestao ativo (heuristica ou IA).
+ */
 @Service
 @Transactional
 public class ClassificationSuggestionService {
 
-    private static final double HISTORY_THRESHOLD = 0.8;
-
     private final RuleEngineService ruleEngineService;
-    private final LearningHistoryRepository learningRepository;
     private final AiSuggestionRepository suggestionRepository;
     private final MovementRepository movementRepository;
+    private final ChartOfAccountRepository chartRepository;
+    private final SuggestionProviderSelector providerSelector;
 
     public ClassificationSuggestionService(RuleEngineService ruleEngineService,
-                                           LearningHistoryRepository learningRepository,
                                            AiSuggestionRepository suggestionRepository,
-                                           MovementRepository movementRepository) {
+                                           MovementRepository movementRepository,
+                                           ChartOfAccountRepository chartRepository,
+                                           SuggestionProviderSelector providerSelector) {
         this.ruleEngineService = ruleEngineService;
-        this.learningRepository = learningRepository;
         this.suggestionRepository = suggestionRepository;
         this.movementRepository = movementRepository;
+        this.chartRepository = chartRepository;
+        this.providerSelector = providerSelector;
     }
 
     public AiSuggestion suggestFor(UUID movementId) {
@@ -47,23 +55,16 @@ public class ClassificationSuggestionService {
             return persist(movement, rule.get().getContaId(), BigDecimal.valueOf(95), "REGRA");
         }
 
-        Optional<LearningHistory> learned = bestFromHistory(movement);
-        if (learned.isPresent()) {
-            BigDecimal confianca = BigDecimal.valueOf(Math.min(90, 60 + learned.get().getOcorrencias() * 5));
-            return persist(movement, learned.get().getContaId(), confianca, "HISTORICO");
+        List<ChartOfAccount> contas = chartRepository.findByEmpresaId(movement.getEmpresaId());
+        for (AiSuggestionProvider provider : providerSelector.providers()) {
+            Optional<SuggestedAccount> sugestao = provider.suggest(movement, contas);
+            if (sugestao.isPresent()) {
+                return persist(movement, sugestao.get().contaId(), sugestao.get().confianca(),
+                        provider.origem());
+            }
         }
 
         return persist(movement, null, BigDecimal.ZERO, "NENHUMA");
-    }
-
-    private Optional<LearningHistory> bestFromHistory(Movement movement) {
-        if (movement.getDescricao() == null) {
-            return Optional.empty();
-        }
-        return learningRepository.findByScope(movement.getEmpresaId(), movement.getClienteId()).stream()
-                .filter(h -> StringSimilarity.ratio(movement.getDescricao(), h.getDescricaoPadrao())
-                        >= HISTORY_THRESHOLD)
-                .max((a, b) -> Integer.compare(a.getOcorrencias(), b.getOcorrencias()));
     }
 
     private AiSuggestion persist(Movement movement, UUID contaId, BigDecimal confianca, String origem) {

@@ -35,13 +35,17 @@ public final class AccountDtos {
             boolean ativo,
             UUID clienteId,
             UUID centroCustoId,
-            UUID filialId) {
+            UUID filialId,
+            String tipoMovimento,
+            String bancoContains,
+            String documentoContains) {
     }
 
     public record AccountRuleResponse(
             UUID id, String nome, String descricaoContains, String valorOperador,
             BigDecimal valorRef, UUID contaId, boolean marcarRevisao, int prioridade, boolean ativo,
-            UUID clienteId, UUID centroCustoId, UUID filialId) {
+            UUID clienteId, UUID centroCustoId, UUID filialId,
+            String tipoMovimento, String bancoContains, String documentoContains) {
     }
 
     public record SuggestionResponse(
@@ -112,5 +116,28 @@ public final class AccountDtos {
 
     public record BranchResponse(
             UUID id, String codigo, String nome, String cnpj, boolean ativo, UUID clienteId) {
+    }
+
+    /** Vinculo manual de um lancamento a um contrato de financiamento. */
+    public record LoanContractAssignRequest(UUID loanContractId) {
+    }
+
+    public record LoanContractRequest(
+            @NotBlank String descricao,
+            BigDecimal valorTotal,
+            BigDecimal taxaJuros,
+            Integer parcelas,
+            UUID contaPrincipalId,
+            UUID contaJurosId,
+            UUID contaEncargosId,
+            String classificacaoPrazo,
+            boolean ativo,
+            UUID clienteId) {
+    }
+
+    public record LoanContractResponse(
+            UUID id, String descricao, BigDecimal valorTotal, BigDecimal taxaJuros, Integer parcelas,
+            UUID contaPrincipalId, UUID contaJurosId, UUID contaEncargosId,
+            String classificacaoPrazo, boolean ativo, UUID clienteId) {
     }
 }
