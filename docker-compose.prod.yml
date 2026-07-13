@@ -1,0 +1,35 @@
+# Producao — Oracle Always Free (VM ARM Ampere A1, Ubuntu).
+#
+# Fiel ao DEPLOY.md 3.c: a VM roda SO o backend; banco = Neon, storage = R2.
+# Caddy fica na frente pegando HTTPS (Let's Encrypt) automaticamente.
+#
+# Subir:
+#   cp .env.prod.example .env.prod   # e preencher
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Health: curl https://api.nalisystems.com/actuator/health
+
+services:
+  backend:
+    build: .
+    restart: unless-stopped
+    env_file: .env.prod
+    expose:
+      - "8080"          # so interno na rede do compose; NAO publica na internet
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data      # persiste os certificados TLS
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -30,3 +30,5 @@ target/
 
 # Segredos locais (nunca commitar o .env real)
 .env
+.env.prod
+# (o .env.prod.example, com placeholders, PODE ser commitado)

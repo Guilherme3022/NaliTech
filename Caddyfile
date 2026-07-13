@@ -1,0 +1,7 @@
+# Caddy — HTTPS automatico (Let's Encrypt) + reverse proxy para o backend.
+# Requer o DNS de api.nalisystems.com apontando para o IP publico ANTES de subir
+# (Cloudflare: registro A, "DNS only" / nuvem cinza).
+
+api.nalisystems.com {
+    reverse_proxy backend:8080
+}
