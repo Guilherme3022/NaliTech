@@ -15,6 +15,9 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
 
     Optional<Reconciliation> findByIdAndEmpresaId(UUID id, UUID empresaId);
 
+    // Limpeza em cascata quando um upload (e suas movimentacoes) e removido.
+    void deleteByMovementIdIn(java.util.Collection<UUID> movementIds);
+
     Page<Reconciliation> findByEmpresaIdAndStatus(UUID empresaId, ReconciliationStatus status,
                                                   Pageable pageable);
 

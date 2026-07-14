@@ -8,8 +8,12 @@ import com.nalitech.modules.file.event.ArquivoRecebidoEvent;
 import com.nalitech.modules.client.repository.ClientRepository;
 import com.nalitech.modules.file.repository.FileRepository;
 import com.nalitech.modules.file.repository.UploadRepository;
+import com.nalitech.modules.movement.entity.Movement;
+import com.nalitech.modules.movement.repository.MovementRepository;
 import com.nalitech.modules.reconciliation.entity.ConciliacaoSituacao;
 import com.nalitech.modules.reconciliation.repository.ConciliacaoRepository;
+import com.nalitech.modules.reconciliation.repository.ReconciliationRepository;
+import java.util.List;
 import com.nalitech.security.SecurityUtils;
 import com.nalitech.shared.exception.BusinessException;
 import com.nalitech.shared.exception.ResourceNotFoundException;
@@ -39,16 +43,22 @@ public class UploadService {
     private final UploadRepository uploadRepository;
     private final ClientRepository clientRepository;
     private final ConciliacaoRepository conciliacaoRepository;
+    private final MovementRepository movementRepository;
+    private final ReconciliationRepository reconciliationRepository;
     private final StorageService storageService;
     private final ApplicationEventPublisher eventPublisher;
 
     public UploadService(FileRepository fileRepository, UploadRepository uploadRepository,
                          ClientRepository clientRepository, ConciliacaoRepository conciliacaoRepository,
+                         MovementRepository movementRepository,
+                         ReconciliationRepository reconciliationRepository,
                          StorageService storageService, ApplicationEventPublisher eventPublisher) {
         this.fileRepository = fileRepository;
         this.uploadRepository = uploadRepository;
         this.clientRepository = clientRepository;
         this.conciliacaoRepository = conciliacaoRepository;
+        this.movementRepository = movementRepository;
+        this.reconciliationRepository = reconciliationRepository;
         this.storageService = storageService;
         this.eventPublisher = eventPublisher;
     }
@@ -152,6 +162,15 @@ public class UploadService {
             throw new BusinessException(
                     "Arquivo de conciliacao concluida nao pode ser excluido. "
                     + "Use a substituicao (mantem o historico).", HttpStatus.BAD_REQUEST);
+        }
+        // Limpeza em cascata: remove as movimentacoes extraidas deste arquivo e os
+        // itens de conciliacao gerados a partir delas (senao ficam "fantasmas" no
+        // dashboard mesmo depois de apagar o upload).
+        List<Movement> movimentos = movementRepository.findByUploadId(upload.getId());
+        if (!movimentos.isEmpty()) {
+            List<UUID> movimentoIds = movimentos.stream().map(Movement::getId).toList();
+            reconciliationRepository.deleteByMovementIdIn(movimentoIds);
+            movementRepository.deleteAll(movimentos);
         }
         fileRepository.findByIdAndEmpresaId(upload.getFileId(), empresaId)
                 .ifPresent(f -> storageService.delete(f.getStorageKey()));
