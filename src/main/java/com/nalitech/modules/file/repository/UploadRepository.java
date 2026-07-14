@@ -15,12 +15,14 @@ public interface UploadRepository extends JpaRepository<Upload, UUID> {
 
     Optional<Upload> findByIdAndEmpresaId(UUID id, UUID empresaId);
 
+    // cast(:param as string) da tipo ao parametro nulo, evitando o erro do PostgreSQL
+    // "could not determine data type of parameter" no filtro opcional (is null).
     @Query("""
             select u from Upload u
             where u.empresaId = :empresaId
-              and (:clienteId is null or u.clienteId = :clienteId)
-              and (:inicio is null or u.createdAt >= :inicio)
-              and (:fim is null or u.createdAt <= :fim)
+              and (cast(:clienteId as string) is null or u.clienteId = :clienteId)
+              and (cast(:inicio as string) is null or u.createdAt >= :inicio)
+              and (cast(:fim as string) is null or u.createdAt <= :fim)
             """)
     Page<Upload> filter(@Param("empresaId") UUID empresaId,
                        @Param("clienteId") UUID clienteId,

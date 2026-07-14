@@ -19,12 +19,14 @@ public interface ClientRepository extends JpaRepository<Client, UUID> {
 
     List<Client> findByEmpresaIdAndStatus(UUID empresaId, ClientStatus status);
 
+    // O cast(:search as string) evita que o Hibernate 6 vincule o parametro nulo
+    // como bytea no PostgreSQL (erro: function lower(bytea) does not exist).
     @Query("""
             select c from Client c
             where c.empresaId = :empresaId
-              and (:search is null
-                   or lower(c.nome) like lower(concat('%', :search, '%'))
-                   or c.cnpjCpf like concat('%', :search, '%'))
+              and (cast(:search as string) is null
+                   or lower(c.nome) like lower(concat('%', cast(:search as string), '%'))
+                   or c.cnpjCpf like concat('%', cast(:search as string), '%'))
             """)
     Page<Client> search(@Param("empresaId") UUID empresaId,
                         @Param("search") String search,

@@ -11,13 +11,15 @@ import org.springframework.data.repository.query.Param;
 
 public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 
+    // cast(:param as string) da tipo ao parametro nulo, evitando o erro do PostgreSQL
+    // "could not determine data type of parameter" no filtro opcional (is null).
     @Query("""
             select a from AuditLog a
             where a.empresaId = :empresaId
-              and (:usuarioId is null or a.usuarioId = :usuarioId)
-              and (:entidade is null or a.entidade = :entidade)
-              and (:inicio is null or a.timestamp >= :inicio)
-              and (:fim is null or a.timestamp <= :fim)
+              and (cast(:usuarioId as string) is null or a.usuarioId = :usuarioId)
+              and (cast(:entidade as string) is null or a.entidade = :entidade)
+              and (cast(:inicio as string) is null or a.timestamp >= :inicio)
+              and (cast(:fim as string) is null or a.timestamp <= :fim)
             order by a.timestamp desc
             """)
     Page<AuditLog> search(@Param("empresaId") UUID empresaId,

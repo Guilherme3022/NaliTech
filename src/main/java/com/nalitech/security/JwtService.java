@@ -35,10 +35,13 @@ public class JwtService {
                 .subject(user.id().toString())
                 .claim(EMAIL_CLAIM, user.email())
                 .claim(ROLES_CLAIM, user.roles())
-                .claim(EMPRESA_CLAIM, user.empresaId().toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(accessExpirationSeconds)))
                 .signWith(signingKey);
+        // ADMIN geral fica "acima" das empresas (empresaId nulo).
+        if (user.empresaId() != null) {
+            builder.claim(EMPRESA_CLAIM, user.empresaId().toString());
+        }
         if (user.clienteId() != null) {
             builder.claim(CLIENTE_CLAIM, user.clienteId().toString());
         }
@@ -59,10 +62,13 @@ public class JwtService {
                 ? UUID.fromString(claims.get(CLIENTE_CLAIM, String.class))
                 : null;
         List<String> roles = claims.get(ROLES_CLAIM, List.class);
+        UUID empresaId = claims.get(EMPRESA_CLAIM) != null
+                ? UUID.fromString(claims.get(EMPRESA_CLAIM, String.class))
+                : null;
         return new AuthenticatedUser(
                 UUID.fromString(claims.getSubject()),
                 claims.get(EMAIL_CLAIM, String.class),
-                UUID.fromString(claims.get(EMPRESA_CLAIM, String.class)),
+                empresaId,
                 roles == null ? List.of() : roles,
                 clienteId);
     }

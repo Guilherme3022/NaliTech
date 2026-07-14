@@ -43,7 +43,8 @@ public class DataInitializer implements CommandLineRunner {
         }
         var adminRole = roleRepository.findByName(RoleName.ADMIN).orElseThrow();
         User admin = new User();
-        admin.setEmpresaId(DEFAULT_EMPRESA_ID);
+        // ADMIN geral (dono da plataforma) fica acima das empresas: sem empresa vinculada.
+        admin.setEmpresaId(null);
         admin.setName("Administrador");
         admin.setEmail(adminEmail);
         admin.setPasswordHash(passwordEncoder.encode(adminPassword));

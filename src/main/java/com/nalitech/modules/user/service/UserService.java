@@ -46,8 +46,16 @@ public class UserService {
         if (userRepository.existsByEmail(request.email())) {
             throw new BusinessException("Ja existe um usuario com este e-mail.", HttpStatus.CONFLICT);
         }
+        // Item 5: apenas o ADMIN geral pode existir sem empresa. Usuario comum
+        // (CONTADOR/AUXILIAR/CLIENTE) precisa estar vinculado a uma empresa.
+        UUID empresaId = SecurityUtils.currentEmpresaId();
+        boolean isAdmin = request.roles().contains(RoleName.ADMIN);
+        if (!isAdmin && empresaId == null) {
+            throw new BusinessException(
+                    "Selecione uma empresa antes de criar um usuario comum.", HttpStatus.BAD_REQUEST);
+        }
         User user = new User();
-        user.setEmpresaId(SecurityUtils.currentEmpresaId());
+        user.setEmpresaId(empresaId);
         user.setName(request.name());
         user.setEmail(request.email());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
