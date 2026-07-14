@@ -83,12 +83,17 @@ Visão geral com números do escritório (pendências, uploads recentes, etc.).
 Cadastro dos clientes do escritório (as empresas atendidas). Cada cliente terá
 seu plano de contas, arquivos e conciliações.
 
-### Uploads
-Gestão geral de arquivos do cliente: **envia arquivos** (extratos, planilhas,
-notas...) e acompanha o status do processamento. **Exige um cliente selecionado**
-— nenhum arquivo entra "solto", sem dono. Para o fluxo de conciliação, você pode
-enviar o arquivo direto no detalhe da conciliação (ver adiante) — esta tela é
-mais para consulta/gestão dos arquivos.
+### Movimentações
+Os **lançamentos extraídos dos arquivos** (cada linha de um extrato vira uma
+movimentação: data, valor, descrição, conta, status). Aqui você **vê, edita e
+exclui** — útil para corrigir uma leitura torta (ex.: valor errado num PDF) ou
+remover uma duplicata, sem precisar reenviar o arquivo. Filtra por cliente e
+competência selecionados no topo.
+
+> **Não existe mais um menu "Uploads".** O envio de arquivos acontece **dentro da
+> conciliação** (você abre o lote e envia ali). O status/erro de processamento de
+> cada arquivo aparece no próprio detalhe da conciliação, e um clique em "Detalhe"
+> abre a tela de processamento do arquivo (para depurar erros).
 
 ### Conciliação
 O coração do sistema. Tem duas visões:
@@ -118,12 +123,17 @@ O coração do sistema. Tem duas visões:
 ### Plano de contas
 O catálogo de contas de cada cliente. É o que diz "onde cada movimentação será
 registrada". Pode ter contas específicas do cliente ou contas compartilhadas do
-escritório.
+escritório. Você pode montar as contas **manualmente**, aplicar um **plano-modelo**,
+ou **importar de um Excel/CSV** (botão "Importar plano") — o arquivo precisa ter
+colunas `codigo` e `nome` (e opcionalmente `tipo`); códigos já existentes são
+ignorados. (Importar de PDF não é confiável; use Excel/CSV.)
 
 ### Perfis de conciliação
 Um "pacote de configuração" por cliente: de onde vêm os dados (sistema de
 origem), tipo de arquivo, para qual sistema contábil exporta e qual plano usa.
-Evita reconfigurar tudo a cada mês. **Exige que o cliente já tenha plano.**
+Evita reconfigurar tudo a cada mês. **Exige que o cliente já tenha plano.** Ao
+criar uma nova conciliação, você pode **escolher o perfil** — ele fica vinculado
+ao lote (aparece no card).
 
 ### Planos-modelo
 Estruturas de plano de contas **reutilizáveis, por escritório**. Você monta um

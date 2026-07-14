@@ -8,6 +8,7 @@ import com.nalitech.modules.reconciliation.dto.ConciliacaoDtos.ConciliacaoRespon
 import com.nalitech.modules.reconciliation.entity.Conciliacao;
 import com.nalitech.modules.reconciliation.entity.ConciliacaoSituacao;
 import com.nalitech.modules.reconciliation.repository.ConciliacaoRepository;
+import com.nalitech.modules.reconciliation.repository.ReconciliationProfileRepository;
 import com.nalitech.security.SecurityUtils;
 import com.nalitech.shared.exception.BusinessException;
 import com.nalitech.shared.exception.ResourceNotFoundException;
@@ -26,15 +27,18 @@ public class ConciliacaoService {
     private final ClientRepository clientRepository;
     private final UploadRepository uploadRepository;
     private final ChartOfAccountRepository chartOfAccountRepository;
+    private final ReconciliationProfileRepository profileRepository;
 
     public ConciliacaoService(ConciliacaoRepository conciliacaoRepository,
                               ClientRepository clientRepository,
                               UploadRepository uploadRepository,
-                              ChartOfAccountRepository chartOfAccountRepository) {
+                              ChartOfAccountRepository chartOfAccountRepository,
+                              ReconciliationProfileRepository profileRepository) {
         this.conciliacaoRepository = conciliacaoRepository;
         this.clientRepository = clientRepository;
         this.uploadRepository = uploadRepository;
         this.chartOfAccountRepository = chartOfAccountRepository;
+        this.profileRepository = profileRepository;
     }
 
     @Transactional(readOnly = true)
@@ -46,17 +50,29 @@ public class ConciliacaoService {
                 .toList();
     }
 
-    public ConciliacaoResponse create(UUID clienteId, LocalDate competencia) {
+    public ConciliacaoResponse create(UUID clienteId, LocalDate competencia, UUID perfilId) {
         UUID empresaId = SecurityUtils.requireEmpresaId();
         // Regra: nenhuma conciliacao sem cliente (spec item 5/12).
         clientRepository.findByIdAndEmpresaId(clienteId, empresaId)
                 .orElseThrow(() -> new BusinessException(
                         "Cliente invalido para esta empresa.", HttpStatus.BAD_REQUEST));
 
+        // Se um perfil foi escolhido, valida que pertence a empresa e ao cliente.
+        if (perfilId != null) {
+            var perfil = profileRepository.findByIdAndEmpresaId(perfilId, empresaId)
+                    .orElseThrow(() -> new BusinessException(
+                            "Perfil de conciliacao invalido.", HttpStatus.BAD_REQUEST));
+            if (!perfil.getClienteId().equals(clienteId)) {
+                throw new BusinessException(
+                        "O perfil escolhido e de outro cliente.", HttpStatus.BAD_REQUEST);
+            }
+        }
+
         Conciliacao conciliacao = new Conciliacao();
         conciliacao.setEmpresaId(empresaId);
         conciliacao.setClienteId(clienteId);
         conciliacao.setCompetencia(competencia);
+        conciliacao.setPerfilId(perfilId);
         conciliacao.setSituacao(ConciliacaoSituacao.RASCUNHO);
         return toResponse(conciliacaoRepository.save(conciliacao));
     }

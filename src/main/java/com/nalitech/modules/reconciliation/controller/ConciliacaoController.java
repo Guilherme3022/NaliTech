@@ -52,7 +52,8 @@ public class ConciliacaoController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ConciliacaoResponse create(@Valid @RequestBody CreateConciliacaoRequest request) {
-        return conciliacaoService.create(request.clienteId(), parseCompetencia(request.competencia()));
+        return conciliacaoService.create(request.clienteId(), parseCompetencia(request.competencia()),
+                request.perfilId());
     }
 
     @PostMapping("/{id}/uploads/{uploadId}")

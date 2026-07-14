@@ -21,6 +21,7 @@ public final class ConciliacaoDtos {
     // competencia chega como "YYYY-MM" (input month do front); convertida no controller.
     public record CreateConciliacaoRequest(
             @NotNull UUID clienteId,
-            @NotNull String competencia) {
+            @NotNull String competencia,
+            UUID perfilId) {
     }
 }
