@@ -5,6 +5,7 @@ import com.nalitech.modules.file.entity.FileEntity;
 import com.nalitech.modules.file.entity.Upload;
 import com.nalitech.modules.file.entity.UploadStatus;
 import com.nalitech.modules.file.event.ArquivoRecebidoEvent;
+import com.nalitech.modules.client.repository.ClientRepository;
 import com.nalitech.modules.file.repository.FileRepository;
 import com.nalitech.modules.file.repository.UploadRepository;
 import com.nalitech.security.SecurityUtils;
@@ -34,20 +35,31 @@ public class UploadService {
 
     private final FileRepository fileRepository;
     private final UploadRepository uploadRepository;
+    private final ClientRepository clientRepository;
     private final StorageService storageService;
     private final ApplicationEventPublisher eventPublisher;
 
     public UploadService(FileRepository fileRepository, UploadRepository uploadRepository,
-                         StorageService storageService, ApplicationEventPublisher eventPublisher) {
+                         ClientRepository clientRepository, StorageService storageService,
+                         ApplicationEventPublisher eventPublisher) {
         this.fileRepository = fileRepository;
         this.uploadRepository = uploadRepository;
+        this.clientRepository = clientRepository;
         this.storageService = storageService;
         this.eventPublisher = eventPublisher;
     }
 
     public UploadResponse upload(MultipartFile file, UUID clienteId) {
         validate(file);
-        UUID empresaId = SecurityUtils.currentEmpresaId();
+        UUID empresaId = SecurityUtils.requireEmpresaId();
+        // Item 9: arquivo obrigatoriamente vinculado a um cliente da empresa atual.
+        if (clienteId == null) {
+            throw new BusinessException(
+                    "Selecione um cliente antes de enviar o arquivo.", HttpStatus.BAD_REQUEST);
+        }
+        clientRepository.findByIdAndEmpresaId(clienteId, empresaId)
+                .orElseThrow(() -> new BusinessException(
+                        "Cliente invalido para esta empresa.", HttpStatus.BAD_REQUEST));
         byte[] content = readBytes(file);
         String hash = HashUtil.sha256Hex(content);
 

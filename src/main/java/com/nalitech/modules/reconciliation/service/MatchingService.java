@@ -124,6 +124,10 @@ public class MatchingService {
                                  BigDecimal score, String motivo) {
         Reconciliation reconciliation = new Reconciliation();
         reconciliation.setEmpresaId(movement.getEmpresaId());
+        // EA: propaga cliente e competencia (1o dia do mes da movimentacao).
+        reconciliation.setClienteId(movement.getClienteId());
+        reconciliation.setCompetencia(
+                movement.getData() != null ? movement.getData().withDayOfMonth(1) : null);
         reconciliation.setMovementId(movement.getId());
         reconciliation.setMatchedMovementId(matchedId);
         reconciliation.setStatus(ReconciliationStatus.PENDENTE);

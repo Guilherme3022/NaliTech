@@ -4,6 +4,7 @@ import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ConfirmRequest
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ReconciliationResponse;
 import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
 import com.nalitech.modules.reconciliation.service.ReconciliationService;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,14 +29,28 @@ public class ReconciliationController {
     }
 
     @GetMapping("/pending")
-    public Page<ReconciliationResponse> pending(Pageable pageable) {
-        return reconciliationService.pending(pageable);
+    public Page<ReconciliationResponse> pending(
+            @RequestParam(required = false) UUID clienteId,
+            @RequestParam(required = false) String competencia,
+            Pageable pageable) {
+        return reconciliationService.pending(clienteId, parseCompetencia(competencia), pageable);
     }
 
     @GetMapping("/history")
     public Page<ReconciliationResponse> history(
-            @RequestParam(defaultValue = "CONFIRMADO") ReconciliationStatus status, Pageable pageable) {
-        return reconciliationService.history(status, pageable);
+            @RequestParam(defaultValue = "CONFIRMADO") ReconciliationStatus status,
+            @RequestParam(required = false) UUID clienteId,
+            @RequestParam(required = false) String competencia,
+            Pageable pageable) {
+        return reconciliationService.history(status, clienteId, parseCompetencia(competencia), pageable);
+    }
+
+    // Competencia chega como "YYYY-MM" (input month do front) -> 1o dia do mes.
+    private LocalDate parseCompetencia(String competencia) {
+        if (competencia == null || competencia.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(competencia.trim() + "-01");
     }
 
     @PostMapping("/{id}/confirm")

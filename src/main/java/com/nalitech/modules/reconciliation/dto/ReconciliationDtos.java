@@ -2,6 +2,7 @@ package com.nalitech.modules.reconciliation.dto;
 
 import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public final class ReconciliationDtos {
@@ -11,6 +12,8 @@ public final class ReconciliationDtos {
 
     public record ReconciliationResponse(
             UUID id,
+            UUID clienteId,
+            LocalDate competencia,
             UUID movementId,
             UUID matchedMovementId,
             ReconciliationStatus status,

@@ -33,7 +33,7 @@ public class UploadController {
     @PostMapping(consumes = "multipart/form-data")
     @ResponseStatus(HttpStatus.CREATED)
     public UploadResponse upload(@RequestParam("file") MultipartFile file,
-                                 @RequestParam(value = "clienteId", required = false) UUID clienteId) {
+                                 @RequestParam(value = "clienteId") UUID clienteId) {
         return uploadService.upload(file, clienteId);
     }
 

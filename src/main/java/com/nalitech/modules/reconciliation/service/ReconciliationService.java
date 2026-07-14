@@ -10,6 +10,7 @@ import com.nalitech.modules.reconciliation.event.ConciliacaoEvents.ConciliacaoCo
 import com.nalitech.modules.reconciliation.repository.ReconciliationRepository;
 import com.nalitech.security.SecurityUtils;
 import com.nalitech.shared.exception.ResourceNotFoundException;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -34,17 +35,18 @@ public class ReconciliationService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ReconciliationResponse> pending(Pageable pageable) {
+    public Page<ReconciliationResponse> pending(UUID clienteId, LocalDate competencia, Pageable pageable) {
         return reconciliationRepository
-                .findByEmpresaIdAndStatus(SecurityUtils.currentEmpresaId(),
-                        ReconciliationStatus.PENDENTE, pageable)
+                .search(SecurityUtils.currentEmpresaId(), ReconciliationStatus.PENDENTE,
+                        clienteId, competencia, pageable)
                 .map(this::toResponse);
     }
 
     @Transactional(readOnly = true)
-    public Page<ReconciliationResponse> history(ReconciliationStatus status, Pageable pageable) {
+    public Page<ReconciliationResponse> history(ReconciliationStatus status, UUID clienteId,
+                                                LocalDate competencia, Pageable pageable) {
         return reconciliationRepository
-                .findByEmpresaIdAndStatus(SecurityUtils.currentEmpresaId(), status, pageable)
+                .search(SecurityUtils.currentEmpresaId(), status, clienteId, competencia, pageable)
                 .map(this::toResponse);
     }
 
@@ -82,7 +84,8 @@ public class ReconciliationService {
     }
 
     private ReconciliationResponse toResponse(Reconciliation r) {
-        return new ReconciliationResponse(r.getId(), r.getMovementId(), r.getMatchedMovementId(),
+        return new ReconciliationResponse(r.getId(), r.getClienteId(), r.getCompetencia(),
+                r.getMovementId(), r.getMatchedMovementId(),
                 r.getStatus(), r.getCamada(), r.getScore(), r.getMotivo());
     }
 }
