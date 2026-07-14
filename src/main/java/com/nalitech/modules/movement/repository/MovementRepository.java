@@ -28,6 +28,10 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
 
     long countByEmpresaIdAndStatus(UUID empresaId, MovementStatus status);
 
+    // Export por conciliacao (EF): movimentacoes do cliente na competencia.
+    List<Movement> findByEmpresaIdAndClienteIdAndDataBetweenOrderByData(
+            UUID empresaId, UUID clienteId, LocalDate inicio, LocalDate fim);
+
     // Dashboard (Increment 8): aguardando classificacao/parametrizacao.
     long countByEmpresaIdAndStatusAndCategoriaSugeridaIsNull(UUID empresaId, MovementStatus status);
 

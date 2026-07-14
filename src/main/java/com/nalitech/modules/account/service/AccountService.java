@@ -34,7 +34,12 @@ public class AccountService {
 
     public ChartAccountResponse createAccount(ChartAccountRequest request) {
         UUID empresaId = SecurityUtils.currentEmpresaId();
-        if (chartRepository.existsByEmpresaIdAndCodigo(empresaId, request.codigo())) {
+        // Codigo unico por cliente (ou por empresa quando for conta compartilhada).
+        boolean duplicado = request.clienteId() == null
+                ? chartRepository.existsByEmpresaIdAndCodigoAndClienteIdIsNull(empresaId, request.codigo())
+                : chartRepository.existsByEmpresaIdAndClienteIdAndCodigo(
+                        empresaId, request.clienteId(), request.codigo());
+        if (duplicado) {
             throw new BusinessException("Ja existe conta com este codigo.", HttpStatus.CONFLICT);
         }
         ChartOfAccount account = new ChartOfAccount();

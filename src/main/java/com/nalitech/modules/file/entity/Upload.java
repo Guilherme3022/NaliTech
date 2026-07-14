@@ -24,6 +24,20 @@ public class Upload extends TenantEntity {
     @Column(name = "file_id", nullable = false)
     private UUID fileId;
 
+    // Lote (Conciliacao) ao qual o arquivo foi anexado (ED).
+    @Column(name = "conciliacao_id")
+    private UUID conciliacaoId;
+
+    // Versionamento/substituicao (EE - spec secoes 17-18).
+    @Column(nullable = false)
+    private int versao = 1;
+
+    @Column(name = "substituido_por_id")
+    private UUID substituidoPorId;
+
+    @Column(name = "justificativa_substituicao", length = 500)
+    private String justificativaSubstituicao;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UploadStatus status = UploadStatus.RECEBIDO;

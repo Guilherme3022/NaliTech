@@ -51,6 +51,14 @@ public class UploadController {
         return uploadService.getById(id);
     }
 
+    @PostMapping(value = "/{id}/substituir", consumes = "multipart/form-data")
+    @ResponseStatus(HttpStatus.CREATED)
+    public UploadResponse substituir(@PathVariable UUID id,
+                                     @RequestParam("file") MultipartFile file,
+                                     @RequestParam(value = "justificativa", required = false) String justificativa) {
+        return uploadService.substitute(id, file, justificativa);
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id) {

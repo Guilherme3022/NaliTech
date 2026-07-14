@@ -8,6 +8,8 @@ import com.nalitech.modules.file.event.ArquivoRecebidoEvent;
 import com.nalitech.modules.client.repository.ClientRepository;
 import com.nalitech.modules.file.repository.FileRepository;
 import com.nalitech.modules.file.repository.UploadRepository;
+import com.nalitech.modules.reconciliation.entity.ConciliacaoSituacao;
+import com.nalitech.modules.reconciliation.repository.ConciliacaoRepository;
 import com.nalitech.security.SecurityUtils;
 import com.nalitech.shared.exception.BusinessException;
 import com.nalitech.shared.exception.ResourceNotFoundException;
@@ -36,17 +38,58 @@ public class UploadService {
     private final FileRepository fileRepository;
     private final UploadRepository uploadRepository;
     private final ClientRepository clientRepository;
+    private final ConciliacaoRepository conciliacaoRepository;
     private final StorageService storageService;
     private final ApplicationEventPublisher eventPublisher;
 
     public UploadService(FileRepository fileRepository, UploadRepository uploadRepository,
-                         ClientRepository clientRepository, StorageService storageService,
-                         ApplicationEventPublisher eventPublisher) {
+                         ClientRepository clientRepository, ConciliacaoRepository conciliacaoRepository,
+                         StorageService storageService, ApplicationEventPublisher eventPublisher) {
         this.fileRepository = fileRepository;
         this.uploadRepository = uploadRepository;
         this.clientRepository = clientRepository;
+        this.conciliacaoRepository = conciliacaoRepository;
         this.storageService = storageService;
         this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * EE (spec 17-18): substitui um arquivo criando uma nova versao e preservando
+     * o original no historico (com a justificativa). Nunca ha exclusao definitiva.
+     */
+    public UploadResponse substitute(UUID id, MultipartFile file, String justificativa) {
+        validate(file);
+        UUID empresaId = SecurityUtils.requireEmpresaId();
+        Upload original = uploadRepository.findByIdAndEmpresaId(id, empresaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Upload nao encontrado."));
+
+        byte[] content = readBytes(file);
+        String hash = HashUtil.sha256Hex(content);
+        fileRepository.findByEmpresaIdAndHashSha256(empresaId, hash).ifPresent(existing -> {
+            throw new BusinessException(
+                    "Arquivo duplicado: este conteudo ja foi enviado.", HttpStatus.CONFLICT);
+        });
+        String storageKey = "%s/%s-%s".formatted(empresaId, UUID.randomUUID(), file.getOriginalFilename());
+        storageService.store(storageKey, content, file.getContentType());
+        FileEntity saved = persistFile(file, empresaId, original.getClienteId(), hash, storageKey, content.length);
+
+        Upload novo = new Upload();
+        novo.setEmpresaId(empresaId);
+        novo.setClienteId(original.getClienteId());
+        novo.setFileId(saved.getId());
+        novo.setConciliacaoId(original.getConciliacaoId());
+        novo.setVersao(original.getVersao() + 1);
+        novo.setStatus(UploadStatus.RECEBIDO);
+        Upload persistedNovo = uploadRepository.save(novo);
+
+        original.setSubstituidoPorId(persistedNovo.getId());
+        original.setJustificativaSubstituicao(justificativa);
+        uploadRepository.save(original);
+
+        eventPublisher.publishEvent(new ArquivoRecebidoEvent(
+                persistedNovo.getId(), empresaId, saved.getId(), original.getClienteId(),
+                saved.getTipoMime(), saved.getNomeOriginal()));
+        return toResponse(persistedNovo, saved);
     }
 
     public UploadResponse upload(MultipartFile file, UUID clienteId) {
@@ -101,6 +144,15 @@ public class UploadService {
         UUID empresaId = SecurityUtils.currentEmpresaId();
         Upload upload = uploadRepository.findByIdAndEmpresaId(id, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Upload nao encontrado."));
+        // EE: arquivo de conciliacao concluida nao pode ser excluido (rastreabilidade).
+        if (upload.getConciliacaoId() != null
+                && conciliacaoRepository.findByIdAndEmpresaId(upload.getConciliacaoId(), empresaId)
+                        .map(c -> c.getSituacao() == ConciliacaoSituacao.CONCLUIDA)
+                        .orElse(false)) {
+            throw new BusinessException(
+                    "Arquivo de conciliacao concluida nao pode ser excluido. "
+                    + "Use a substituicao (mantem o historico).", HttpStatus.BAD_REQUEST);
+        }
         fileRepository.findByIdAndEmpresaId(upload.getFileId(), empresaId)
                 .ifPresent(f -> storageService.delete(f.getStorageKey()));
         uploadRepository.delete(upload);

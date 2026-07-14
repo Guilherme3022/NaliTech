@@ -32,6 +32,8 @@ public interface UploadRepository extends JpaRepository<Upload, UUID> {
 
     long countByEmpresaIdAndStatus(UUID empresaId, UploadStatus status);
 
+    long countByConciliacaoId(UUID conciliacaoId);
+
     long countByEmpresaIdAndCreatedAtAfter(UUID empresaId, OffsetDateTime after);
 
     java.util.List<Upload> findTop10ByEmpresaIdOrderByCreatedAtDesc(UUID empresaId);

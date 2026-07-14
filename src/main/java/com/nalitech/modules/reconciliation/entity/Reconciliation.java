@@ -28,6 +28,10 @@ public class Reconciliation extends TenantEntity {
     @Column(name = "competencia")
     private LocalDate competencia;
 
+    // Lote (Conciliacao) ao qual este item pertence (ED).
+    @Column(name = "conciliacao_id")
+    private UUID conciliacaoId;
+
     @Column(name = "movement_id", nullable = false)
     private UUID movementId;
 
