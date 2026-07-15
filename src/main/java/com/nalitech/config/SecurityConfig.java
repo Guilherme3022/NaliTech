@@ -6,6 +6,8 @@ import com.nalitech.modules.apikey.security.ApiKeyAuthenticationFilter;
 import com.nalitech.security.JwtAuthenticationFilter;
 import com.nalitech.security.JwtService;
 import com.nalitech.security.RateLimitFilter;
+import com.nalitech.security.RestAccessDeniedHandler;
+import com.nalitech.security.RestAuthEntryPoint;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -48,6 +50,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated())
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(new RestAuthEntryPoint(objectMapper))
+                        .accessDeniedHandler(new RestAccessDeniedHandler(objectMapper)))
 
                 .addFilterBefore(new RateLimitFilter(rateLimitProperties, objectMapper),
                         UsernamePasswordAuthenticationFilter.class)

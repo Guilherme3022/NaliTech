@@ -210,6 +210,12 @@ Depois que o frontend tem URL pública, volte no **backend** e ajuste o CORS:
   (o domínio exato do frontend, com `https://`, sem barra no final; vários
   domínios podem ser separados por vírgula).
 
+> ⚠️ **`www` e não-`www` são origens DIFERENTES para o CORS.** Se o usuário
+> acessa `https://www.nalisystems.com` mas só `https://nalisystems.com` está na
+> lista, o Spring rejeita a requisição real com **403 Forbidden ("Invalid CORS
+> request")** — o front mostra pop-up de erro em `/users/me`. Inclua as duas:
+> `CORS_ALLOWED_ORIGINS=https://nalisystems.com,https://www.nalisystems.com`.
+
 Reinicie/redeploy o backend para aplicar. Sem isso, o navegador **bloqueia** as
 chamadas do frontend com erro de CORS, mesmo com o backend no ar.
 
