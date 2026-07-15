@@ -4,10 +4,15 @@ import com.nalitech.modules.account.dto.AccountDtos.ChartAccountRequest;
 import com.nalitech.modules.account.dto.AccountDtos.ChartAccountResponse;
 import com.nalitech.modules.account.service.AccountService;
 import com.nalitech.modules.account.service.ChartImportService;
+import com.nalitech.modules.account.service.ChartImportService.ContaSelecionada;
 import com.nalitech.modules.account.service.ChartImportService.ImportResult;
+import com.nalitech.modules.account.service.ChartImportService.PreviewConta;
 import com.nalitech.shared.exception.BusinessException;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -61,7 +66,7 @@ public class ChartOfAccountController {
         accountService.deleteAccount(id);
     }
 
-    // Importa plano de contas de Excel (.xlsx/.xls) ou CSV para um cliente.
+    // Importa plano de contas de TXT (D-/C-), Excel (.xlsx/.xls) ou CSV para um cliente.
     @PostMapping(value = "/import", consumes = "multipart/form-data")
     public ImportResult importChart(@RequestParam("file") MultipartFile file,
                                     @RequestParam("clienteId") UUID clienteId) {
@@ -71,5 +76,28 @@ public class ChartOfAccountController {
         } catch (IOException ex) {
             throw new BusinessException("Falha ao ler o arquivo enviado.", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    // Le o arquivo e devolve a previa das contas (sem persistir) para revisao/selecao.
+    @PostMapping(value = "/import/preview", consumes = "multipart/form-data")
+    public List<PreviewConta> previewChart(@RequestParam("file") MultipartFile file,
+                                           @RequestParam("clienteId") UUID clienteId) {
+        try {
+            return chartImportService.preview(
+                    clienteId, file.getOriginalFilename(), file.getBytes());
+        } catch (IOException ex) {
+            throw new BusinessException("Falha ao ler o arquivo enviado.", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    public record ConfirmImportRequest(
+            @NotNull UUID clienteId,
+            @NotEmpty List<ContaSelecionada> contas) {
+    }
+
+    // Persiste apenas as contas selecionadas na previa.
+    @PostMapping("/import/confirm")
+    public ImportResult confirmImport(@Valid @RequestBody ConfirmImportRequest request) {
+        return chartImportService.confirmImport(request.clienteId(), request.contas());
     }
 }
