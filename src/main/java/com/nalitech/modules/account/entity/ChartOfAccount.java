@@ -29,6 +29,11 @@ public class ChartOfAccount extends TenantEntity {
     @Column(name = "analitica")
     private Boolean analitica;
 
+    // Natureza de saldo da conta: "DEVEDORA" / "CREDORA" / null (o que o D-/C- legado indicava).
+    // Nao confundir com o lado do lancamento (partida dobrada), que e por movimentacao.
+    @Column(name = "natureza_saldo", length = 10)
+    private String naturezaSaldo;
+
     @Column(name = "category_id")
     private UUID categoryId;
 

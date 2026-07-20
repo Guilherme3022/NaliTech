@@ -46,13 +46,16 @@ public class ChartImportService {
             String tipo,
             String natureza,
             Boolean analitica,
+            // Natureza de saldo (DEVEDORA/CREDORA) = o que o D-/C- legado indicava. Pode ser null.
+            String naturezaSaldo,
             boolean portador,
             boolean jaExiste,
             boolean importavel) {
     }
 
     /** Conta escolhida pelo usuario para persistir. {@code analitica} pode vir nulo (recalculado). */
-    public record ContaSelecionada(String codigo, String nome, String tipo, Boolean analitica) {
+    public record ContaSelecionada(
+            String codigo, String nome, String tipo, Boolean analitica, String naturezaSaldo) {
     }
 
     private final ChartOfAccountRepository chartRepository;
@@ -92,7 +95,7 @@ public class ChartImportService {
                     && chartRepository.existsByEmpresaIdAndClienteIdAndCodigo(empresaId, clienteId, codigo);
             Boolean analitica = c.kind().analitica();
             previa.add(new PreviewConta(
-                    codigo, nome, c.kind().label(), c.kind().name(), analitica,
+                    codigo, nome, c.kind().label(), c.kind().name(), analitica, c.naturezaSaldo(),
                     c.portador(), jaExiste, temCodigo && !jaExiste));
         }
         return previa;
@@ -129,6 +132,7 @@ public class ChartImportService {
             conta.setNome(nome);
             conta.setTipo(kind.label());
             conta.setAnalitica(ChartAccountKind.resolveAnalitica(c.analitica(), c.tipo()));
+            conta.setNaturezaSaldo(normalizeNaturezaSaldo(c.naturezaSaldo()));
             chartRepository.save(conta);
             criadas++;
         }
@@ -143,7 +147,8 @@ public class ChartImportService {
         List<PreviewConta> previa = preview(clienteId, filename, content);
         List<ContaSelecionada> selecionadas = previa.stream()
                 .filter(PreviewConta::importavel)
-                .map(p -> new ContaSelecionada(p.codigo(), p.nome(), p.tipo(), p.analitica()))
+                .map(p -> new ContaSelecionada(
+                        p.codigo(), p.nome(), p.tipo(), p.analitica(), p.naturezaSaldo()))
                 .toList();
         int naoImportaveis = (int) previa.stream().filter(p -> !p.importavel()).count();
         if (selecionadas.isEmpty()) {
@@ -154,6 +159,21 @@ public class ChartImportService {
         }
         ImportResult result = confirmImport(clienteId, selecionadas);
         return new ImportResult(result.contasCriadas(), result.contasIgnoradas() + naoImportaveis);
+    }
+
+    /** Normaliza a natureza de saldo para DEVEDORA/CREDORA (aceita D/C, debito/credito). */
+    private static String normalizeNaturezaSaldo(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String t = raw.trim().toUpperCase();
+        if (t.startsWith("D")) {
+            return "DEVEDORA";
+        }
+        if (t.startsWith("C")) {
+            return "CREDORA";
+        }
+        return null;
     }
 
     private UUID requireClient(UUID clienteId) {
@@ -195,7 +215,7 @@ public class ChartImportService {
                 String tipo = cell(row, colTipo, fmt);
                 contas.add(new ParsedAccount(
                         cell(row, colCodigo, fmt), cell(row, colNome, fmt),
-                        tipo, ChartAccountKind.normalize(tipo), false));
+                        tipo, ChartAccountKind.normalize(tipo), false, null));
             }
         } catch (Exception ex) {
             throw new BusinessException("Falha ao ler Excel: " + ex.getMessage(),

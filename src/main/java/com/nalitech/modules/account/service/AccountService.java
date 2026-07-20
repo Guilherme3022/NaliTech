@@ -112,6 +112,7 @@ public class AccountService {
         account.setNome(request.nome());
         account.setTipo(request.tipo());
         account.setAnalitica(ChartAccountKind.resolveAnalitica(request.analitica(), request.tipo()));
+        account.setNaturezaSaldo(request.naturezaSaldo());
         account.setCategoryId(request.categoryId());
         account.setParentId(request.parentId());
         account.setClienteId(request.clienteId());
@@ -136,7 +137,8 @@ public class AccountService {
 
     private ChartAccountResponse toResponse(ChartOfAccount a) {
         return new ChartAccountResponse(a.getId(), a.getCodigo(), a.getNome(), a.getTipo(),
-                a.getAnalitica(), a.getCategoryId(), a.getParentId(), a.getClienteId());
+                a.getAnalitica(), a.getNaturezaSaldo(),
+                a.getCategoryId(), a.getParentId(), a.getClienteId());
     }
 
     private AccountRuleResponse toResponse(AccountRule r) {

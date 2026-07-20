@@ -41,7 +41,11 @@ public class ChartLayoutParser {
 
     /** Conta lida do arquivo (ainda nao persistida). */
     public record ParsedAccount(
-            String codigo, String nome, String tipoRaw, ChartAccountKind kind, boolean portador) {
+            String codigo, String nome, String tipoRaw, ChartAccountKind kind, boolean portador,
+            // Natureza de saldo da conta: "DEVEDORA" / "CREDORA" / null. E o que o layout
+            // legado D-/C- representava (D = devedora, C = credora). Nao confundir com o
+            // lado do lancamento (partida dobrada), que e por movimentacao.
+            String naturezaSaldo) {
     }
 
     private static final List<String> CODIGO_HEADERS =
@@ -119,7 +123,8 @@ public class ChartLayoutParser {
             boolean temFilho = codigos.stream()
                     .anyMatch(outro -> !outro.equals(c.codigo()) && outro.startsWith(c.codigo()));
             ChartAccountKind kind = temFilho ? ChartAccountKind.SINTETICA : ChartAccountKind.ANALITICA;
-            result.add(new ParsedAccount(c.codigo(), c.nome(), c.tipoRaw(), kind, c.portador()));
+            result.add(new ParsedAccount(
+                    c.codigo(), c.nome(), c.tipoRaw(), kind, c.portador(), c.naturezaSaldo()));
         }
         return result;
     }
@@ -147,7 +152,7 @@ public class ChartLayoutParser {
             String codigo = f[6].trim();
             String nome = f[8].trim();
             contas.add(new ParsedAccount(
-                    codigo, nome, indCta, ChartAccountKind.normalize(indCta), false));
+                    codigo, nome, indCta, ChartAccountKind.normalize(indCta), false, null));
         }
         return contas;
     }
@@ -179,8 +184,11 @@ public class ChartLayoutParser {
                 portador = nomeParte.substring(0, pipe).trim().equalsIgnoreCase("PORTADOR");
                 nome = nomeParte.substring(pipe + 1).trim();
             }
-            // O layout legado nao distingue S/A; a hierarquia resolve depois.
-            contas.add(new ParsedAccount(codigo, nome, null, ChartAccountKind.INDEFINIDA, portador));
+            // O layout legado nao distingue S/A (a hierarquia resolve); mas o D-/C- indica
+            // a natureza de saldo: D = devedora, C = credora.
+            String naturezaSaldo = prefix.startsWith("D-") ? "DEVEDORA" : "CREDORA";
+            contas.add(new ParsedAccount(
+                    codigo, nome, null, ChartAccountKind.INDEFINIDA, portador, naturezaSaldo));
         }
         return contas;
     }
@@ -243,7 +251,7 @@ public class ChartLayoutParser {
             int start = Math.min(nameStart, nameEnd);
             String nome = line.substring(start, nameEnd).trim();
 
-            contas.add(new ParsedAccount(codigo.trim(), nome, tipoRaw, kind, false));
+            contas.add(new ParsedAccount(codigo.trim(), nome, tipoRaw, kind, false, null));
         }
         return contas;
     }
@@ -345,7 +353,8 @@ public class ChartLayoutParser {
             CSVRecord row = records.get(i);
             String tipo = at(row, colTipo);
             contas.add(new ParsedAccount(
-                    at(row, colCodigo), at(row, colNome), tipo, ChartAccountKind.normalize(tipo), false));
+                    at(row, colCodigo), at(row, colNome), tipo,
+                    ChartAccountKind.normalize(tipo), false, null));
         }
         return contas;
     }
@@ -359,7 +368,7 @@ public class ChartLayoutParser {
             }
             String tipo = row.size() >= 3 ? row.get(2) : null;
             contas.add(new ParsedAccount(
-                    row.get(0), row.get(1), tipo, ChartAccountKind.normalize(tipo), false));
+                    row.get(0), row.get(1), tipo, ChartAccountKind.normalize(tipo), false, null));
         }
         return contas;
     }

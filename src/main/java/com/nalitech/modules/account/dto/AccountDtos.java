@@ -15,13 +15,14 @@ public final class AccountDtos {
             @NotBlank String nome,
             String tipo,
             Boolean analitica,
+            String naturezaSaldo,
             UUID categoryId,
             UUID parentId,
             UUID clienteId) {
     }
 
     public record ChartAccountResponse(
-            UUID id, String codigo, String nome, String tipo, Boolean analitica,
+            UUID id, String codigo, String nome, String tipo, Boolean analitica, String naturezaSaldo,
             UUID categoryId, UUID parentId, UUID clienteId) {
     }
 
