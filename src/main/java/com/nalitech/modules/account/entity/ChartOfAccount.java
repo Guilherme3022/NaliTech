@@ -16,8 +16,19 @@ import lombok.Setter;
 @NoArgsConstructor
 public class ChartOfAccount extends TenantEntity {
 
+    // Identificador UNICO da conta dentro do escopo (empresa + cliente). Para planos com
+    // codigo reduzido, guarda o reduzido (ex.: "0005198"); para os demais, o proprio codigo.
     @Column(nullable = false, length = 30)
     private String codigo;
+
+    // Codigo de CLASSIFICACAO (mascara hierarquica, ex.: "21301001"). PODE se repetir entre
+    // contas distintas — usado apenas para hierarquia/agrupamento/relatorios, nunca como chave.
+    @Column(name = "codigo_classificacao", length = 30)
+    private String codigoClassificacao;
+
+    // Codigo ORIGINAL completo, como veio no arquivo (ex.: "000519821301001"), sem perder zeros.
+    @Column(name = "codigo_original", length = 60)
+    private String codigoOriginal;
 
     @Column(nullable = false, length = 150)
     private String nome;

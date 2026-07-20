@@ -105,6 +105,9 @@ public class PlanoModeloService {
             account.setEmpresaId(empresaId);
             account.setClienteId(clienteId);
             account.setCodigo(conta.getCodigo());
+            // Modelos usam um unico codigo: classificacao/original espelham o codigo.
+            account.setCodigoClassificacao(conta.getCodigo());
+            account.setCodigoOriginal(conta.getCodigo());
             account.setNome(conta.getNome());
             account.setTipo(conta.getTipo());
             account.setAnalitica(ChartAccountKind.resolveAnalitica(conta.getAnalitica(), conta.getTipo()));

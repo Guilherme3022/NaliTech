@@ -109,6 +109,11 @@ public class AccountService {
 
     private void apply(ChartOfAccount account, ChartAccountRequest request) {
         account.setCodigo(request.codigo());
+        // Sem valor explicito, classificacao/original espelham o codigo (conta de codigo unico).
+        account.setCodigoClassificacao(
+                blankTo(request.codigoClassificacao(), request.codigo()));
+        account.setCodigoOriginal(
+                blankTo(request.codigoOriginal(), request.codigo()));
         account.setNome(request.nome());
         account.setTipo(request.tipo());
         account.setAnalitica(ChartAccountKind.resolveAnalitica(request.analitica(), request.tipo()));
@@ -135,8 +140,14 @@ public class AccountService {
         rule.setDocumentoContains(request.documentoContains());
     }
 
+    private static String blankTo(String value, String fallback) {
+        return value != null && !value.isBlank() ? value : fallback;
+    }
+
     private ChartAccountResponse toResponse(ChartOfAccount a) {
-        return new ChartAccountResponse(a.getId(), a.getCodigo(), a.getNome(), a.getTipo(),
+        return new ChartAccountResponse(a.getId(), a.getCodigo(),
+                a.getCodigoClassificacao(), a.getCodigoOriginal(),
+                a.getNome(), a.getTipo(),
                 a.getAnalitica(), a.getNaturezaSaldo(),
                 a.getCategoryId(), a.getParentId(), a.getClienteId());
     }

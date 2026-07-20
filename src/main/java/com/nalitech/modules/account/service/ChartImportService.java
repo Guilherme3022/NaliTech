@@ -41,7 +41,12 @@ public class ChartImportService {
 
     /** Item da previa de importacao (nada foi persistido ainda). */
     public record PreviewConta(
+            // Identificador unico (codigo reduzido quando houver; senao = classificacao).
             String codigo,
+            // Codigo de classificacao (mascara hierarquica) — pode repetir entre contas.
+            String codigoClassificacao,
+            // Codigo original completo, sem remover zeros a esquerda.
+            String codigoOriginal,
             String nome,
             String tipo,
             String natureza,
@@ -55,7 +60,8 @@ public class ChartImportService {
 
     /** Conta escolhida pelo usuario para persistir. {@code analitica} pode vir nulo (recalculado). */
     public record ContaSelecionada(
-            String codigo, String nome, String tipo, Boolean analitica, String naturezaSaldo) {
+            String codigo, String codigoClassificacao, String codigoOriginal,
+            String nome, String tipo, Boolean analitica, String naturezaSaldo) {
     }
 
     private final ChartOfAccountRepository chartRepository;
@@ -88,15 +94,19 @@ public class ChartImportService {
 
         List<PreviewConta> previa = new ArrayList<>(contas.size());
         for (ParsedAccount c : contas) {
-            String codigo = c.codigo() == null ? "" : c.codigo().trim();
-            String nome = c.nome() == null ? "" : c.nome().trim();
+            String codigo = trimOrEmpty(c.codigo());
+            String classificacao = firstNonBlank(c.codigoClassificacao(), codigo);
+            String original = firstNonBlank(c.codigoOriginal(), codigo);
+            String nome = trimOrEmpty(c.nome());
             boolean temCodigo = !codigo.isBlank() && !nome.isBlank();
+            // Unicidade e SEMPRE pelo identificador unico (reduzido/original), nunca pela
+            // classificacao — que se repete entre fornecedores do mesmo grupo.
             boolean jaExiste = temCodigo
                     && chartRepository.existsByEmpresaIdAndClienteIdAndCodigo(empresaId, clienteId, codigo);
             Boolean analitica = c.kind().analitica();
             previa.add(new PreviewConta(
-                    codigo, nome, c.kind().label(), c.kind().name(), analitica, c.naturezaSaldo(),
-                    c.portador(), jaExiste, temCodigo && !jaExiste));
+                    codigo, classificacao, original, nome, c.kind().label(), c.kind().name(),
+                    analitica, c.naturezaSaldo(), c.portador(), jaExiste, temCodigo && !jaExiste));
         }
         return previa;
     }
@@ -112,12 +122,13 @@ public class ChartImportService {
         int criadas = 0;
         int ignoradas = 0;
         for (ContaSelecionada c : contas) {
-            String codigo = c.codigo() == null ? "" : c.codigo().trim();
-            String nome = c.nome() == null ? "" : c.nome().trim();
+            String codigo = trimOrEmpty(c.codigo());
+            String nome = trimOrEmpty(c.nome());
             if (codigo.isBlank() || nome.isBlank()) {
                 ignoradas++;
                 continue;
             }
+            // Reimportacao idempotente: a conta ja existe (mesmo identificador unico) -> ignora.
             if (chartRepository.existsByEmpresaIdAndClienteIdAndCodigo(empresaId, clienteId, codigo)) {
                 ignoradas++;
                 continue;
@@ -129,6 +140,8 @@ public class ChartImportService {
             conta.setEmpresaId(empresaId);
             conta.setClienteId(clienteId);
             conta.setCodigo(codigo);
+            conta.setCodigoClassificacao(firstNonBlank(c.codigoClassificacao(), codigo));
+            conta.setCodigoOriginal(firstNonBlank(c.codigoOriginal(), codigo));
             conta.setNome(nome);
             conta.setTipo(kind.label());
             conta.setAnalitica(ChartAccountKind.resolveAnalitica(c.analitica(), c.tipo()));
@@ -148,7 +161,8 @@ public class ChartImportService {
         List<ContaSelecionada> selecionadas = previa.stream()
                 .filter(PreviewConta::importavel)
                 .map(p -> new ContaSelecionada(
-                        p.codigo(), p.nome(), p.tipo(), p.analitica(), p.naturezaSaldo()))
+                        p.codigo(), p.codigoClassificacao(), p.codigoOriginal(),
+                        p.nome(), p.tipo(), p.analitica(), p.naturezaSaldo()))
                 .toList();
         int naoImportaveis = (int) previa.stream().filter(p -> !p.importavel()).count();
         if (selecionadas.isEmpty()) {
@@ -159,6 +173,15 @@ public class ChartImportService {
         }
         ImportResult result = confirmImport(clienteId, selecionadas);
         return new ImportResult(result.contasCriadas(), result.contasIgnoradas() + naoImportaveis);
+    }
+
+    private static String trimOrEmpty(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    /** Primeiro valor nao-vazio (apos trim); usado para dar fallback do codigo unico. */
+    private static String firstNonBlank(String value, String fallback) {
+        return value != null && !value.isBlank() ? value.trim() : fallback;
     }
 
     /** Normaliza a natureza de saldo para DEVEDORA/CREDORA (aceita D/C, debito/credito). */
@@ -213,7 +236,7 @@ public class ChartImportService {
                     continue;
                 }
                 String tipo = cell(row, colTipo, fmt);
-                contas.add(new ParsedAccount(
+                contas.add(ParsedAccount.simple(
                         cell(row, colCodigo, fmt), cell(row, colNome, fmt),
                         tipo, ChartAccountKind.normalize(tipo), false, null));
             }

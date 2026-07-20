@@ -41,11 +41,32 @@ public class ChartLayoutParser {
 
     /** Conta lida do arquivo (ainda nao persistida). */
     public record ParsedAccount(
-            String codigo, String nome, String tipoRaw, ChartAccountKind kind, boolean portador,
+            // Identificador UNICO da conta dentro do arquivo. No layout de largura fixa com
+            // contador, e o codigo REDUZIDO (ex.: "0005198"); nos demais layouts e o proprio
+            // codigo lido. Preserva zeros a esquerda.
+            String codigo,
+            // Codigo de CLASSIFICACAO (mascara hierarquica, ex.: "21301001"). PODE se repetir
+            // entre contas distintas (varios fornecedores no mesmo grupo) — por isso NUNCA deve
+            // ser usado sozinho como identificador. Serve para hierarquia/agrupamento/relatorios.
+            String codigoClassificacao,
+            // String ORIGINAL completa do codigo, exatamente como veio no arquivo
+            // (ex.: "000519821301001"), sem remover zeros a esquerda.
+            String codigoOriginal,
+            String nome, String tipoRaw, ChartAccountKind kind, boolean portador,
             // Natureza de saldo da conta: "DEVEDORA" / "CREDORA" / null. E o que o layout
             // legado D-/C- representava (D = devedora, C = credora). Nao confundir com o
             // lado do lancamento (partida dobrada), que e por movimentacao.
             String naturezaSaldo) {
+
+        /**
+         * Fabrica para layouts que NAO separam codigo reduzido de classificacao (SPED, legado,
+         * delimitado, Excel): os tres codigos recebem o mesmo valor.
+         */
+        public static ParsedAccount simple(String codigo, String nome, String tipoRaw,
+                ChartAccountKind kind, boolean portador, String naturezaSaldo) {
+            return new ParsedAccount(
+                    codigo, codigo, codigo, nome, tipoRaw, kind, portador, naturezaSaldo);
+        }
     }
 
     private static final List<String> CODIGO_HEADERS =
@@ -110,21 +131,26 @@ public class ChartLayoutParser {
      * Publico para o caminho de Excel reaproveitar a mesma regra.
      */
     public static List<ParsedAccount> inferHierarchy(List<ParsedAccount> contas) {
-        List<String> codigos = contas.stream()
-                .map(ParsedAccount::codigo)
+        // A hierarquia (prefixo) e resolvida pela CLASSIFICACAO, nao pelo identificador unico:
+        // o codigo reduzido e sequencial e nao carrega estrutura de arvore.
+        List<String> classificacoes = contas.stream()
+                .map(ParsedAccount::codigoClassificacao)
                 .filter(c -> c != null && !c.isBlank())
                 .toList();
         List<ParsedAccount> result = new ArrayList<>(contas.size());
         for (ParsedAccount c : contas) {
-            if (c.kind() != ChartAccountKind.INDEFINIDA || c.codigo() == null || c.codigo().isBlank()) {
+            String classificacao = c.codigoClassificacao();
+            if (c.kind() != ChartAccountKind.INDEFINIDA
+                    || classificacao == null || classificacao.isBlank()) {
                 result.add(c);
                 continue;
             }
-            boolean temFilho = codigos.stream()
-                    .anyMatch(outro -> !outro.equals(c.codigo()) && outro.startsWith(c.codigo()));
+            boolean temFilho = classificacoes.stream()
+                    .anyMatch(outro -> !outro.equals(classificacao) && outro.startsWith(classificacao));
             ChartAccountKind kind = temFilho ? ChartAccountKind.SINTETICA : ChartAccountKind.ANALITICA;
             result.add(new ParsedAccount(
-                    c.codigo(), c.nome(), c.tipoRaw(), kind, c.portador(), c.naturezaSaldo()));
+                    c.codigo(), c.codigoClassificacao(), c.codigoOriginal(),
+                    c.nome(), c.tipoRaw(), kind, c.portador(), c.naturezaSaldo()));
         }
         return result;
     }
@@ -151,7 +177,7 @@ public class ChartLayoutParser {
             String indCta = f[4].trim();
             String codigo = f[6].trim();
             String nome = f[8].trim();
-            contas.add(new ParsedAccount(
+            contas.add(ParsedAccount.simple(
                     codigo, nome, indCta, ChartAccountKind.normalize(indCta), false, null));
         }
         return contas;
@@ -187,7 +213,7 @@ public class ChartLayoutParser {
             // O layout legado nao distingue S/A (a hierarquia resolve); mas o D-/C- indica
             // a natureza de saldo: D = devedora, C = credora.
             String naturezaSaldo = prefix.startsWith("D-") ? "DEVEDORA" : "CREDORA";
-            contas.add(new ParsedAccount(
+            contas.add(ParsedAccount.simple(
                     codigo, nome, null, ChartAccountKind.INDEFINIDA, portador, naturezaSaldo));
         }
         return contas;
@@ -236,9 +262,19 @@ public class ChartLayoutParser {
         for (int i = 0; i < matchedLines.size(); i++) {
             String line = matchedLines.get(i);
             String digits = digitBlocks.get(i);
-            String codigo = counterWidth > 0 && digits.length() > counterWidth
-                    ? digits.substring(counterWidth)
-                    : digits;
+            // Divide o bloco de digitos em: codigo REDUZIDO (contador) + codigo de CLASSIFICACAO.
+            // O reduzido e sequencial/unico; a classificacao pode repetir entre contas distintas.
+            // Ambos preservam os zeros a esquerda (digits nao contem espacos).
+            String codigoOriginal = digits;
+            String codigoReduzido;
+            String codigoClassificacao;
+            if (counterWidth > 0 && digits.length() > counterWidth) {
+                codigoReduzido = digits.substring(0, counterWidth);
+                codigoClassificacao = digits.substring(counterWidth);
+            } else {
+                codigoReduzido = digits;
+                codigoClassificacao = digits;
+            }
 
             String tipoRaw = null;
             ChartAccountKind kind = ChartAccountKind.INDEFINIDA;
@@ -251,7 +287,10 @@ public class ChartLayoutParser {
             int start = Math.min(nameStart, nameEnd);
             String nome = line.substring(start, nameEnd).trim();
 
-            contas.add(new ParsedAccount(codigo.trim(), nome, tipoRaw, kind, false, null));
+            // Identificador unico = reduzido; classificacao mantida para hierarquia/agrupamento.
+            contas.add(new ParsedAccount(
+                    codigoReduzido, codigoClassificacao, codigoOriginal,
+                    nome, tipoRaw, kind, false, null));
         }
         return contas;
     }
@@ -276,7 +315,13 @@ public class ChartLayoutParser {
                 }
                 if (prev != null) {
                     total++;
-                    if (value == prev + 1) {
+                    // O contador de um plano real e ESTRITAMENTE CRESCENTE, mas nem sempre
+                    // de 1 em 1: contas excluidas deixam buracos (1,2,5,9,...). Exigir
+                    // value > prev (em vez de == prev + 1) tolera esses saltos e continua
+                    // rejeitando larguras pequenas demais (que geram valores repetidos,
+                    // portanto NAO crescentes) e larguras que invadem o codigo hierarquico
+                    // (que nao e crescente ao longo do arquivo).
+                    if (value > prev) {
                         ok++;
                     }
                 }
@@ -352,7 +397,7 @@ public class ChartLayoutParser {
         for (int i = 1; i < records.size(); i++) {
             CSVRecord row = records.get(i);
             String tipo = at(row, colTipo);
-            contas.add(new ParsedAccount(
+            contas.add(ParsedAccount.simple(
                     at(row, colCodigo), at(row, colNome), tipo,
                     ChartAccountKind.normalize(tipo), false, null));
         }
@@ -367,7 +412,7 @@ public class ChartLayoutParser {
                 continue;
             }
             String tipo = row.size() >= 3 ? row.get(2) : null;
-            contas.add(new ParsedAccount(
+            contas.add(ParsedAccount.simple(
                     row.get(0), row.get(1), tipo, ChartAccountKind.normalize(tipo), false, null));
         }
         return contas;
