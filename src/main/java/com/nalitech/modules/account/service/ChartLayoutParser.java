@@ -2,9 +2,12 @@ package com.nalitech.modules.account.service;
 
 import com.nalitech.modules.account.entity.ChartAccountKind;
 import com.nalitech.shared.exception.BusinessException;
-import java.io.ByteArrayInputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
+import java.io.StringReader;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,9 +53,28 @@ public class ChartLayoutParser {
 
     private static final Pattern FIXED_LINE = Pattern.compile("^(\\d+)(\\s+)(\\S.*)$");
 
+    private static final Charset WINDOWS_1252 = Charset.forName("windows-1252");
+
+    /**
+     * Decodifica os bytes do arquivo para texto. Tenta UTF-8 de forma estrita; se o arquivo
+     * nao for UTF-8 valido (ex.: Windows-1252 / Latin-1, comum em exportacoes de sistemas
+     * contabeis brasileiros), cai para Windows-1252 — evitando o caractere de substituicao
+     * (ex.: "DISPON\uFFFDVEL" no lugar de "DISPONIVEL").
+     */
+    public static String decode(byte[] content) {
+        try {
+            CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT);
+            return decoder.decode(ByteBuffer.wrap(content)).toString();
+        } catch (CharacterCodingException ex) {
+            return new String(content, WINDOWS_1252);
+        }
+    }
+
     /** Le o conteudo texto e devolve as contas, ja com a natureza (kind) resolvida. */
     public List<ParsedAccount> parse(byte[] content) {
-        String text = new String(content, StandardCharsets.UTF_8);
+        String text = decode(content);
         List<String> rawLines = new ArrayList<>();
         for (String line : text.split("\\r?\\n")) {
             if (!line.isBlank()) {
@@ -73,7 +95,7 @@ public class ChartLayoutParser {
         } else if (isFixedWidth(rawLines)) {
             contas = parseFixedWidth(rawLines);
         } else {
-            contas = parseDelimited(content);
+            contas = parseDelimited(text);
         }
         return inferHierarchy(contas);
     }
@@ -283,12 +305,12 @@ public class ChartLayoutParser {
 
     // ---------------------------------------------------------------- Delimitado (com/sem cabecalho)
 
-    private List<ParsedAccount> parseDelimited(byte[] content) {
-        char delimiter = detectDelimiter(content);
+    private List<ParsedAccount> parseDelimited(String text) {
+        char delimiter = detectDelimiter(text);
         CSVFormat format = CSVFormat.DEFAULT.builder()
                 .setIgnoreEmptyLines(true).setTrim(true).setDelimiter(delimiter).build();
         List<CSVRecord> records = new ArrayList<>();
-        try (Reader reader = new InputStreamReader(new ByteArrayInputStream(content), StandardCharsets.UTF_8);
+        try (StringReader reader = new StringReader(text);
              CSVParser parser = format.parse(reader)) {
             records.addAll(parser.getRecords());
         } catch (Exception ex) {
@@ -363,8 +385,8 @@ public class ChartLayoutParser {
                 .replaceAll("\\p{M}", "").trim().toLowerCase();
     }
 
-    private char detectDelimiter(byte[] content) {
-        String head = new String(content, 0, Math.min(content.length, 1024), StandardCharsets.UTF_8);
+    private char detectDelimiter(String text) {
+        String head = text.substring(0, Math.min(text.length(), 1024));
         long pipes = head.chars().filter(c -> c == '|').count();
         long tabs = head.chars().filter(c -> c == '\t').count();
         long semicolons = head.chars().filter(c -> c == ';').count();
