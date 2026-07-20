@@ -1,5 +1,6 @@
 package com.nalitech.modules.file.dto;
 
+import com.nalitech.modules.file.entity.OrigemDocumento;
 import com.nalitech.modules.file.entity.UploadStatus;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -13,6 +14,7 @@ public final class UploadDtos {
             UUID id,
             UUID fileId,
             UUID clienteId,
+            OrigemDocumento origem,
             String nomeOriginal,
             String tipoMime,
             long tamanho,

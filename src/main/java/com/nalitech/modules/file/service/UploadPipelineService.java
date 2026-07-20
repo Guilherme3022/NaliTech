@@ -72,8 +72,12 @@ public class UploadPipelineService {
             advance(upload, UploadStatus.PROCESSANDO, "PARSER");
             ParseResult parseResult = parserFactory.resolve(extension).parse(parserInput);
 
+            // origem do movimento = papel do documento (EXTRATO/SISTEMA), nao a extensao.
+            // A extensao segue sendo usada so para escolher o parser.
+            String origem = event.origem() != null ? event.origem()
+                    : (upload.getOrigem() != null ? upload.getOrigem().name() : "EXTRATO");
             List<UUID> movementIds = movementNormalizer.normalize(
-                    upload.getId(), event.empresaId(), upload.getClienteId(), extension,
+                    upload.getId(), event.empresaId(), upload.getClienteId(), origem,
                     parseResult.movements());
 
             advance(upload, UploadStatus.CONCLUIDO, "NORMALIZACAO");

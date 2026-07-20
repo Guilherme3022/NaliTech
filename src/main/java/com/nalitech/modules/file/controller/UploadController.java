@@ -1,6 +1,7 @@
 package com.nalitech.modules.file.controller;
 
 import com.nalitech.modules.file.dto.UploadDtos.UploadResponse;
+import com.nalitech.modules.file.entity.OrigemDocumento;
 import com.nalitech.modules.file.service.UploadService;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -33,8 +34,9 @@ public class UploadController {
     @PostMapping(consumes = "multipart/form-data")
     @ResponseStatus(HttpStatus.CREATED)
     public UploadResponse upload(@RequestParam("file") MultipartFile file,
-                                 @RequestParam(value = "clienteId") UUID clienteId) {
-        return uploadService.upload(file, clienteId);
+                                 @RequestParam(value = "clienteId") UUID clienteId,
+                                 @RequestParam(value = "origem", required = false) OrigemDocumento origem) {
+        return uploadService.upload(file, clienteId, origem);
     }
 
     @GetMapping

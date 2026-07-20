@@ -16,6 +16,14 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
 
     Optional<Reconciliation> findByIdAndEmpresaId(UUID id, UUID empresaId);
 
+    // Evita casar a mesma movimentacao do sistema com dois itens de extrato.
+    boolean existsByMatchedMovementId(UUID matchedMovementId);
+
+    // Itens de extrato ainda sem correspondencia (para preencher quando o lado
+    // sistema chega depois, independente da ordem de upload).
+    List<Reconciliation> findByEmpresaIdAndClienteIdAndStatusAndMatchedMovementIdIsNull(
+            UUID empresaId, UUID clienteId, ReconciliationStatus status);
+
     // Limpeza em cascata quando um upload (e suas movimentacoes) e removido.
     void deleteByMovementIdIn(java.util.Collection<UUID> movementIds);
 

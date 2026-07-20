@@ -7,6 +7,7 @@ public record ArquivoRecebidoEvent(
         UUID empresaId,
         UUID fileId,
         UUID clienteId,
+        String origem,
         String tipoMime,
         String nomeOriginal) {
 }

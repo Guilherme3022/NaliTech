@@ -21,6 +21,11 @@ public class Upload extends TenantEntity {
     @Column(name = "cliente_id")
     private UUID clienteId;
 
+    // Papel do documento (EXTRATO x SISTEMA) para o matching extrato x sistema.
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private OrigemDocumento origem = OrigemDocumento.EXTRATO;
+
     @Column(name = "file_id", nullable = false)
     private UUID fileId;
 

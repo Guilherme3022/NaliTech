@@ -2,6 +2,7 @@ package com.nalitech.modules.file.service;
 
 import com.nalitech.modules.file.dto.UploadDtos.UploadResponse;
 import com.nalitech.modules.file.entity.FileEntity;
+import com.nalitech.modules.file.entity.OrigemDocumento;
 import com.nalitech.modules.file.entity.Upload;
 import com.nalitech.modules.file.entity.UploadStatus;
 import com.nalitech.modules.file.event.ArquivoRecebidoEvent;
@@ -92,6 +93,7 @@ public class UploadService {
         novo.setClienteId(original.getClienteId());
         novo.setFileId(saved.getId());
         novo.setConciliacaoId(original.getConciliacaoId());
+        novo.setOrigem(original.getOrigem());
         novo.setVersao(original.getVersao() + 1);
         novo.setStatus(UploadStatus.RECEBIDO);
         Upload persistedNovo = uploadRepository.save(novo);
@@ -102,13 +104,14 @@ public class UploadService {
 
         eventPublisher.publishEvent(new ArquivoRecebidoEvent(
                 persistedNovo.getId(), empresaId, saved.getId(), original.getClienteId(),
-                saved.getTipoMime(), saved.getNomeOriginal()));
+                nome(original.getOrigem()), saved.getTipoMime(), saved.getNomeOriginal()));
         return toResponse(persistedNovo, saved);
     }
 
-    public UploadResponse upload(MultipartFile file, UUID clienteId) {
+    public UploadResponse upload(MultipartFile file, UUID clienteId, OrigemDocumento origem) {
         validate(file);
         UUID empresaId = SecurityUtils.requireEmpresaId();
+        OrigemDocumento papel = origem != null ? origem : OrigemDocumento.EXTRATO;
         // Item 9: arquivo obrigatoriamente vinculado a um cliente da empresa atual.
         if (clienteId == null) {
             throw new BusinessException(
@@ -129,11 +132,11 @@ public class UploadService {
         storageService.store(storageKey, content, file.getContentType());
 
         FileEntity saved = persistFile(file, empresaId, clienteId, hash, storageKey, content.length);
-        Upload upload = persistUpload(empresaId, clienteId, saved.getId());
+        Upload upload = persistUpload(empresaId, clienteId, saved.getId(), papel);
 
         eventPublisher.publishEvent(new ArquivoRecebidoEvent(
                 upload.getId(), empresaId, saved.getId(), clienteId,
-                saved.getTipoMime(), saved.getNomeOriginal()));
+                papel.name(), saved.getTipoMime(), saved.getNomeOriginal()));
 
         return toResponse(upload, saved);
     }
@@ -206,13 +209,18 @@ public class UploadService {
         return fileRepository.save(entity);
     }
 
-    private Upload persistUpload(UUID empresaId, UUID clienteId, UUID fileId) {
+    private Upload persistUpload(UUID empresaId, UUID clienteId, UUID fileId, OrigemDocumento origem) {
         Upload upload = new Upload();
         upload.setEmpresaId(empresaId);
         upload.setClienteId(clienteId);
         upload.setFileId(fileId);
+        upload.setOrigem(origem);
         upload.setStatus(UploadStatus.RECEBIDO);
         return uploadRepository.save(upload);
+    }
+
+    private String nome(OrigemDocumento origem) {
+        return (origem != null ? origem : OrigemDocumento.EXTRATO).name();
     }
 
     private FileEntity loadFile(UUID fileId, UUID empresaId) {
@@ -222,7 +230,7 @@ public class UploadService {
 
     private UploadResponse toResponse(Upload upload, FileEntity file) {
         return new UploadResponse(upload.getId(), file.getId(), upload.getClienteId(),
-                file.getNomeOriginal(), file.getTipoMime(), file.getTamanho(),
+                upload.getOrigem(), file.getNomeOriginal(), file.getTipoMime(), file.getTamanho(),
                 upload.getStatus(), upload.getEtapaAtual(), upload.getErroMensagem(),
                 upload.getCreatedAt());
     }

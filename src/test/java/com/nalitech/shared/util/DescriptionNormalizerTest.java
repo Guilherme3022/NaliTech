@@ -25,11 +25,20 @@ class DescriptionNormalizerTest {
     }
 
     @Test
+    void focaNaContraparteRemovendoTermosGenericos() {
+        // Termos de operacao (pix, recebido) sao removidos; sobra a contraparte.
+        assertThat(DescriptionNormalizer.normalize("PIX RECEBIDO NESTLE BRASIL"))
+                .isEqualTo("nestle brasil");
+        assertThat(DescriptionNormalizer.normalize("PAGAMENTO DE BOLETO NESTLE BRASIL LTDA"))
+                .isEqualTo("nestle brasil");
+    }
+
+    @Test
     void jaccardCasaDescricoesComPartesVariaveis() {
         String a = DescriptionNormalizer.normalize("PIX ENERGIA ELETRICA");
         String b = DescriptionNormalizer.normalize("PIX ENERGIA ELETRICA REF MAIO");
-        // {pix,energia,eletrica} vs {pix,energia,eletrica,ref,maio} = 3/5
-        assertThat(StringSimilarity.tokenSimilarity(a, b)).isCloseTo(0.6, within(0.001));
+        // Sem os genericos: {energia,eletrica} vs {energia,eletrica,ref,maio} = 2/4
+        assertThat(StringSimilarity.tokenSimilarity(a, b)).isCloseTo(0.5, within(0.001));
     }
 
     @Test

@@ -40,6 +40,24 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
 
     List<Movement> findByEmpresaIdAndValor(UUID empresaId, BigDecimal valor);
 
+    // Candidatos do lado SISTEMA (contas a pagar/receber) para casar com uma linha de
+    // EXTRATO: mesmo cliente, mesmo valor (com sinal) e data dentro de uma janela.
+    // Ainda nao conciliados (status NORMALIZADO).
+    @Query("""
+            select m from Movement m
+            where m.empresaId = :empresaId
+              and m.clienteId = :clienteId
+              and m.origem = 'SISTEMA'
+              and m.status = com.nalitech.modules.movement.entity.MovementStatus.NORMALIZADO
+              and m.valor = :valor
+              and m.data between :inicio and :fim
+            """)
+    List<Movement> findSistemaCandidates(@Param("empresaId") UUID empresaId,
+                                         @Param("clienteId") UUID clienteId,
+                                         @Param("valor") BigDecimal valor,
+                                         @Param("inicio") LocalDate inicio,
+                                         @Param("fim") LocalDate fim);
+
     List<Movement> findByEmpresaIdAndDataBetweenAndStatusIn(UUID empresaId, LocalDate inicio,
                                                            LocalDate fim, List<MovementStatus> statuses);
 
