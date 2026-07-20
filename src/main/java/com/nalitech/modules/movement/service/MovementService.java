@@ -4,6 +4,7 @@ import com.nalitech.modules.movement.dto.MovementDtos.MovementResponse;
 import com.nalitech.modules.movement.dto.MovementDtos.UpdateMovementRequest;
 import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.modules.movement.repository.MovementRepository;
+import com.nalitech.modules.reconciliation.repository.ReconciliationMatchRepository;
 import com.nalitech.modules.reconciliation.repository.ReconciliationRepository;
 import com.nalitech.security.SecurityUtils;
 import com.nalitech.shared.exception.ResourceNotFoundException;
@@ -21,11 +22,14 @@ public class MovementService {
 
     private final MovementRepository movementRepository;
     private final ReconciliationRepository reconciliationRepository;
+    private final ReconciliationMatchRepository matchRepository;
 
     public MovementService(MovementRepository movementRepository,
-                           ReconciliationRepository reconciliationRepository) {
+                           ReconciliationRepository reconciliationRepository,
+                           ReconciliationMatchRepository matchRepository) {
         this.movementRepository = movementRepository;
         this.reconciliationRepository = reconciliationRepository;
+        this.matchRepository = matchRepository;
     }
 
     @Transactional(readOnly = true)
@@ -54,7 +58,9 @@ public class MovementService {
 
     public void delete(UUID id) {
         Movement movement = find(id);
-        // Remove tambem os itens de conciliacao gerados a partir desta movimentacao.
+        // Remove tambem os itens de conciliacao gerados a partir desta movimentacao
+        // e as pernas de agrupamento (N:1) que a referenciam.
+        matchRepository.deleteByMovementIdIn(List.of(movement.getId()));
         reconciliationRepository.deleteByMovementIdIn(List.of(movement.getId()));
         movementRepository.delete(movement);
     }

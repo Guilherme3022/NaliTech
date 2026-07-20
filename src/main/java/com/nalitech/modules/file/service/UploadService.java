@@ -12,6 +12,7 @@ import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.modules.movement.repository.MovementRepository;
 import com.nalitech.modules.reconciliation.entity.ConciliacaoSituacao;
 import com.nalitech.modules.reconciliation.repository.ConciliacaoRepository;
+import com.nalitech.modules.reconciliation.repository.ReconciliationMatchRepository;
 import com.nalitech.modules.reconciliation.repository.ReconciliationRepository;
 import java.util.List;
 import com.nalitech.security.SecurityUtils;
@@ -45,6 +46,7 @@ public class UploadService {
     private final ConciliacaoRepository conciliacaoRepository;
     private final MovementRepository movementRepository;
     private final ReconciliationRepository reconciliationRepository;
+    private final ReconciliationMatchRepository matchRepository;
     private final StorageService storageService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -52,6 +54,7 @@ public class UploadService {
                          ClientRepository clientRepository, ConciliacaoRepository conciliacaoRepository,
                          MovementRepository movementRepository,
                          ReconciliationRepository reconciliationRepository,
+                         ReconciliationMatchRepository matchRepository,
                          StorageService storageService, ApplicationEventPublisher eventPublisher) {
         this.fileRepository = fileRepository;
         this.uploadRepository = uploadRepository;
@@ -59,6 +62,7 @@ public class UploadService {
         this.conciliacaoRepository = conciliacaoRepository;
         this.movementRepository = movementRepository;
         this.reconciliationRepository = reconciliationRepository;
+        this.matchRepository = matchRepository;
         this.storageService = storageService;
         this.eventPublisher = eventPublisher;
     }
@@ -169,6 +173,7 @@ public class UploadService {
         List<Movement> movimentos = movementRepository.findByUploadId(upload.getId());
         if (!movimentos.isEmpty()) {
             List<UUID> movimentoIds = movimentos.stream().map(Movement::getId).toList();
+            matchRepository.deleteByMovementIdIn(movimentoIds);
             reconciliationRepository.deleteByMovementIdIn(movimentoIds);
             movementRepository.deleteAll(movimentos);
         }

@@ -3,6 +3,7 @@ package com.nalitech.modules.reconciliation.repository;
 import com.nalitech.modules.reconciliation.entity.Reconciliation;
 import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -37,4 +38,20 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
                                 Pageable pageable);
 
     long countByEmpresaIdAndStatus(UUID empresaId, ReconciliationStatus status);
+
+    // Resumo do lote: por status, quantidade e soma do valor das movimentacoes (theta-join
+    // com Movement, pois movementId e uma coluna simples, sem associacao JPA). Filtros
+    // opcionais por cliente/competencia (cast evita erro do Postgres com parametro nulo).
+    @Query("""
+            select r.status, count(r), coalesce(sum(m.valor), 0)
+            from Reconciliation r, Movement m
+            where m.id = r.movementId
+              and r.empresaId = :empresaId
+              and (cast(:clienteId as string) is null or r.clienteId = :clienteId)
+              and (cast(:competencia as string) is null or r.competencia = :competencia)
+            group by r.status
+            """)
+    List<Object[]> summarize(@Param("empresaId") UUID empresaId,
+                             @Param("clienteId") UUID clienteId,
+                             @Param("competencia") LocalDate competencia);
 }
