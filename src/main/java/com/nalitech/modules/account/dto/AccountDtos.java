@@ -14,14 +14,15 @@ public final class AccountDtos {
             @NotBlank String codigo,
             @NotBlank String nome,
             String tipo,
+            Boolean analitica,
             UUID categoryId,
             UUID parentId,
             UUID clienteId) {
     }
 
     public record ChartAccountResponse(
-            UUID id, String codigo, String nome, String tipo, UUID categoryId, UUID parentId,
-            UUID clienteId) {
+            UUID id, String codigo, String nome, String tipo, Boolean analitica,
+            UUID categoryId, UUID parentId, UUID clienteId) {
     }
 
     public record AccountRuleRequest(

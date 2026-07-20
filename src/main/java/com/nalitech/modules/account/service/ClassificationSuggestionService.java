@@ -55,7 +55,9 @@ public class ClassificationSuggestionService {
             return persist(movement, rule.get().getContaId(), BigDecimal.valueOf(95), "REGRA");
         }
 
-        List<ChartOfAccount> contas = chartRepository.findByEmpresaId(movement.getEmpresaId());
+        // Sugestoes so podem apontar para contas lancaveis (analiticas); contas sinteticas
+        // sao agrupadoras e nunca recebem lancamento.
+        List<ChartOfAccount> contas = chartRepository.findLancaveisByEmpresa(movement.getEmpresaId());
         for (AiSuggestionProvider provider : providerSelector.providers()) {
             Optional<SuggestedAccount> sugestao = provider.suggest(movement, contas);
             if (sugestao.isPresent()) {

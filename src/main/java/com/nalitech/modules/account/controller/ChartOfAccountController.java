@@ -49,6 +49,13 @@ public class ChartOfAccountController {
         return accountService.listAccounts(pageable);
     }
 
+    // Contas lancaveis (analiticas) de um cliente: alimenta o seletor de conta na
+    // conciliacao/classificacao. Nunca traz contas sinteticas (agrupadoras).
+    @GetMapping("/lancaveis")
+    public List<ChartAccountResponse> lancaveis(@RequestParam UUID clienteId) {
+        return accountService.listLancaveis(clienteId);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ChartAccountResponse create(@Valid @RequestBody ChartAccountRequest request) {

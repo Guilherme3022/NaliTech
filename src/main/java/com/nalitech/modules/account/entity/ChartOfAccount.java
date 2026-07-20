@@ -25,6 +25,10 @@ public class ChartOfAccount extends TenantEntity {
     @Column(length = 20)
     private String tipo;
 
+    // true = analitica (lancavel); false = sintetica (agrupadora); null = indefinida.
+    @Column(name = "analitica")
+    private Boolean analitica;
+
     @Column(name = "category_id")
     private UUID categoryId;
 

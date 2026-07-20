@@ -56,9 +56,16 @@ public class AutoClassificationListener {
         }
 
         if (conta != null) {
-            classificationService.classify(event.movementId(), conta);
-            log.debug("Movimentacao {} classificada automaticamente na conta {}",
-                    event.movementId(), conta);
+            try {
+                classificationService.classify(event.movementId(), conta);
+                log.debug("Movimentacao {} classificada automaticamente na conta {}",
+                        event.movementId(), conta);
+            } catch (RuntimeException ex) {
+                // Best-effort: uma conta sugerida invalida (ex.: sintetica em historico antigo)
+                // nao pode quebrar a confirmacao. Fica para parametrizacao manual.
+                log.warn("Classificacao automatica ignorada para movimentacao {}: {}",
+                        event.movementId(), ex.getMessage());
+            }
         }
     }
 

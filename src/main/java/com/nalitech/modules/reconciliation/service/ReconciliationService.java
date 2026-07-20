@@ -1,5 +1,6 @@
 package com.nalitech.modules.reconciliation.service;
 
+import com.nalitech.modules.account.entity.ChartOfAccount;
 import com.nalitech.modules.account.repository.ChartOfAccountRepository;
 import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.modules.movement.entity.MovementStatus;
@@ -59,6 +60,7 @@ public class ReconciliationService {
     public ReconciliationResponse confirm(UUID id, UUID contaSugerida) {
         Reconciliation reconciliation = findPending(id);
         requirePlanoDeContas(reconciliation);
+        requireContaLancavel(reconciliation, contaSugerida);
         reconciliation.setStatus(ReconciliationStatus.CONFIRMADO);
         reconciliationRepository.save(reconciliation);
 
@@ -90,6 +92,25 @@ public class ReconciliationService {
             throw new BusinessException(
                     "Nao foi identificado um plano de contas ativo para este cliente. "
                     + "Configure ou vincule um plano de contas antes de iniciar a conciliacao.",
+                    HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    // A conciliacao so pode ser confirmada contra uma conta ANALITICA (lancavel) do mesmo
+    // escopo. Contas sinteticas (agrupadoras) nao recebem lancamento.
+    private void requireContaLancavel(Reconciliation reconciliation, UUID contaSugerida) {
+        if (contaSugerida == null) {
+            return;
+        }
+        ChartOfAccount conta = chartOfAccountRepository
+                .findByIdAndEmpresaId(contaSugerida, reconciliation.getEmpresaId())
+                .orElseThrow(() -> new BusinessException(
+                        "A conta escolhida nao pertence ao plano de contas desta empresa.",
+                        HttpStatus.BAD_REQUEST));
+        if (Boolean.FALSE.equals(conta.getAnalitica())) {
+            throw new BusinessException(
+                    "A conta '" + conta.getCodigo() + " - " + conta.getNome() + "' e sintetica "
+                    + "(agrupadora) e nao pode receber lancamento. Escolha uma conta analitica.",
                     HttpStatus.BAD_REQUEST);
         }
     }

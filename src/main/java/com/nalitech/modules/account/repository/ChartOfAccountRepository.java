@@ -26,6 +26,27 @@ public interface ChartOfAccountRepository extends JpaRepository<ChartOfAccount, 
 
     List<ChartOfAccount> findByEmpresaId(UUID empresaId);
 
+    // Contas lancaveis (conciliacao/sugestoes): analiticas ou ainda indefinidas (null).
+    // Contas sinteticas (analitica = false) sao agrupadoras e nunca recebem lancamento.
+    @Query("""
+            select c from ChartOfAccount c
+            where c.empresaId = :empresaId
+              and (c.analitica is null or c.analitica = true)
+            """)
+    List<ChartOfAccount> findLancaveisByEmpresa(@Param("empresaId") UUID empresaId);
+
+    // Contas lancaveis (analiticas) visiveis para um cliente: as especificas dele + as
+    // compartilhadas do escritorio (cliente_id nulo). Usado no seletor de conta da conciliacao.
+    @Query("""
+            select c from ChartOfAccount c
+            where c.empresaId = :empresaId
+              and (c.clienteId = :clienteId or c.clienteId is null)
+              and (c.analitica is null or c.analitica = true)
+            order by c.codigo asc
+            """)
+    List<ChartOfAccount> findLancaveisForCliente(@Param("empresaId") UUID empresaId,
+                                                 @Param("clienteId") UUID clienteId);
+
     Optional<ChartOfAccount> findByIdAndEmpresaId(UUID id, UUID empresaId);
 
     boolean existsByEmpresaIdAndCodigo(UUID empresaId, String codigo);

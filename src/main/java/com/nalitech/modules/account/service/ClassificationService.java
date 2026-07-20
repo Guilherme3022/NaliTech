@@ -1,13 +1,17 @@
 package com.nalitech.modules.account.service;
 
+import com.nalitech.modules.account.entity.ChartOfAccount;
 import com.nalitech.modules.account.entity.LoanContract;
+import com.nalitech.modules.account.repository.ChartOfAccountRepository;
 import com.nalitech.modules.account.repository.LoanContractRepository;
 import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.modules.movement.entity.MovementStatus;
 import com.nalitech.modules.movement.repository.MovementRepository;
 import com.nalitech.security.SecurityUtils;
+import com.nalitech.shared.exception.BusinessException;
 import com.nalitech.shared.exception.ResourceNotFoundException;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,17 +24,37 @@ public class ClassificationService {
     private final DoubleEntryService doubleEntryService;
     private final RuleEngineService ruleEngineService;
     private final LoanContractRepository loanContractRepository;
+    private final ChartOfAccountRepository chartRepository;
 
     public ClassificationService(MovementRepository movementRepository,
                                  LearningService learningService,
                                  DoubleEntryService doubleEntryService,
                                  RuleEngineService ruleEngineService,
-                                 LoanContractRepository loanContractRepository) {
+                                 LoanContractRepository loanContractRepository,
+                                 ChartOfAccountRepository chartRepository) {
         this.movementRepository = movementRepository;
         this.learningService = learningService;
         this.doubleEntryService = doubleEntryService;
         this.ruleEngineService = ruleEngineService;
         this.loanContractRepository = loanContractRepository;
+        this.chartRepository = chartRepository;
+    }
+
+    // Um lancamento contabil so pode cair em conta ANALITICA (lancavel). Contas sinteticas
+    // (agrupadoras) nunca recebem lancamento. Vale para toda classificacao (auto ou manual).
+    private void requireLancavel(UUID empresaId, UUID contaId) {
+        if (contaId == null) {
+            return;
+        }
+        ChartOfAccount conta = chartRepository.findByIdAndEmpresaId(contaId, empresaId)
+                .orElseThrow(() -> new BusinessException(
+                        "Conta contabil invalida para esta empresa.", HttpStatus.BAD_REQUEST));
+        if (Boolean.FALSE.equals(conta.getAnalitica())) {
+            throw new BusinessException(
+                    "A conta '" + conta.getCodigo() + " - " + conta.getNome() + "' e sintetica "
+                    + "(agrupadora) e nao pode receber lancamento. Escolha uma conta analitica.",
+                    HttpStatus.BAD_REQUEST);
+        }
     }
 
     /** Classifica pela conta de contrapartida (De/Para) e monta a partida dobrada. */
@@ -39,6 +63,7 @@ public class ClassificationService {
         Movement movement = movementRepository.findByIdAndEmpresaId(movementId, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Movimentacao nao encontrada."));
 
+        requireLancavel(empresaId, contaId);
         movement.setCategoriaSugerida(contaId);
         doubleEntryService.applyCounterpart(movement, contaId);
         // Centro de custo e filial: aplicados automaticamente se a regra que casa os definir.
@@ -62,6 +87,8 @@ public class ClassificationService {
         Movement movement = movementRepository.findByIdAndEmpresaId(movementId, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Movimentacao nao encontrada."));
 
+        requireLancavel(empresaId, contaDebitoId);
+        requireLancavel(empresaId, contaCreditoId);
         movement.setContaDebitoId(contaDebitoId);
         movement.setContaCreditoId(contaCreditoId);
         movement.setStatus(MovementStatus.CLASSIFICADO);

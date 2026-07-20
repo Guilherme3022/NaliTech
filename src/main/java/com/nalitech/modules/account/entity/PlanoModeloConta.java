@@ -28,4 +28,8 @@ public class PlanoModeloConta extends TenantEntity {
 
     @Column(length = 20)
     private String tipo;
+
+    // true = analitica (lancavel); false = sintetica; null = indefinida.
+    @Column(name = "analitica")
+    private Boolean analitica;
 }
