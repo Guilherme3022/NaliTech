@@ -33,9 +33,10 @@ public class MovementController {
     @GetMapping
     public Page<MovementResponse> list(
             @RequestParam(required = false) UUID clienteId,
+            @RequestParam(required = false) String origem,
             @RequestParam(required = false) String competencia,
             Pageable pageable) {
-        return movementService.list(clienteId, parseCompetencia(competencia), pageable);
+        return movementService.list(clienteId, origem, parseCompetencia(competencia), pageable);
     }
 
     @PutMapping("/{id}")

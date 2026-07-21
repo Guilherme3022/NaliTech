@@ -15,6 +15,7 @@ public final class UploadDtos {
             UUID fileId,
             UUID clienteId,
             OrigemDocumento origem,
+            UUID bankAccountId,
             String nomeOriginal,
             String tipoMime,
             long tamanho,

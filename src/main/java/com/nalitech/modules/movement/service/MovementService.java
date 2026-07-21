@@ -33,11 +33,12 @@ public class MovementService {
     }
 
     @Transactional(readOnly = true)
-    public Page<MovementResponse> list(UUID clienteId, LocalDate competencia, Pageable pageable) {
+    public Page<MovementResponse> list(UUID clienteId, String origem, LocalDate competencia,
+                                       Pageable pageable) {
         LocalDate inicio = competencia;
         LocalDate fim = competencia == null ? null : competencia.plusMonths(1).minusDays(1);
         return movementRepository
-                .search(SecurityUtils.currentEmpresaId(), clienteId, inicio, fim, pageable)
+                .search(SecurityUtils.currentEmpresaId(), clienteId, origem, inicio, fim, pageable)
                 .map(this::toResponse);
     }
 
@@ -72,7 +73,7 @@ public class MovementService {
 
     private MovementResponse toResponse(Movement m) {
         return new MovementResponse(m.getId(), m.getClienteId(), m.getData(), m.getValor(),
-                m.getDescricao(), m.getTipo(), m.getDocumento(), m.getBanco(),
+                m.getDescricao(), m.getTipo(), m.getDocumento(), m.getBanco(), m.getOrigem(),
                 m.getContaDebitoId(), m.getContaCreditoId(), m.getStatus());
     }
 }

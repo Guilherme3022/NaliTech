@@ -78,7 +78,7 @@ public class UploadPipelineService {
                     : (upload.getOrigem() != null ? upload.getOrigem().name() : "EXTRATO");
             List<UUID> movementIds = movementNormalizer.normalize(
                     upload.getId(), event.empresaId(), upload.getClienteId(), origem,
-                    parseResult.movements());
+                    upload.getBankAccountId(), parseResult.movements());
 
             advance(upload, UploadStatus.CONCLUIDO, "NORMALIZACAO");
             eventPublisher.publishEvent(new MovimentacoesNormalizadasEvent(

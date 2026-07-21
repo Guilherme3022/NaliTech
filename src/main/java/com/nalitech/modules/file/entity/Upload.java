@@ -26,6 +26,11 @@ public class Upload extends TenantEntity {
     @Column(length = 20)
     private OrigemDocumento origem = OrigemDocumento.EXTRATO;
 
+    // Conta bancaria (banco) deste extrato — usada na partida dobrada quando o cliente
+    // tem varios bancos. Opcional; sem ela, usa o banco padrao do cliente.
+    @Column(name = "bank_account_id")
+    private UUID bankAccountId;
+
     @Column(name = "file_id", nullable = false)
     private UUID fileId;
 

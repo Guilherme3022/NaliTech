@@ -48,6 +48,11 @@ public class Movement extends TenantEntity {
     @Column(length = 80)
     private String banco;
 
+    // Conta bancaria (banco) de origem, propagada do upload — define o lado "Banco" da
+    // partida dobrada quando o cliente tem mais de um banco.
+    @Column(name = "bank_account_id")
+    private UUID bankAccountId;
+
     @Column(name = "categoria_sugerida")
     private UUID categoriaSugerida;
 

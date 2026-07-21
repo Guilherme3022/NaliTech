@@ -36,6 +36,19 @@ class LineMovementExtractorTest {
     }
 
     @Test
+    void generico_bb_anexa_contraparte_e_cnpj_da_linha_seguinte() {
+        String texto = String.join("\n",
+                "01/06/2026 0000 14134 612 Recebimento Fornecedor 507 77,12 C",
+                "92.559.830/0001-71 GREEN CARD SA REFEI");
+
+        List<RawMovement> movs = LineMovementExtractor.extract(texto);
+
+        assertThat(movs).hasSize(1);
+        assertThat(movs.get(0).descricao()).contains("GREEN CARD");
+        assertThat(movs.get(0).documento()).isEqualTo("92559830000171");
+    }
+
+    @Test
     void banrisul_usa_dia_isolado_mes_do_cabecalho_e_sinal_de_menos() {
         String texto = String.join("\n",
                 "------------------------- MOVIMENTOS DA CONTA CORRENTE -------------------------",

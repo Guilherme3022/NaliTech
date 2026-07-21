@@ -8,14 +8,20 @@ import com.nalitech.modules.reconciliation.entity.Reconciliation;
 import com.nalitech.modules.reconciliation.entity.ReconciliationRule;
 import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
 import com.nalitech.modules.reconciliation.event.ConciliacaoEvents.ConciliacaoPendenteEvent;
+import com.nalitech.modules.reconciliation.repository.ReconciliationMatchRepository;
 import com.nalitech.modules.reconciliation.repository.ReconciliationRepository;
 import com.nalitech.modules.reconciliation.repository.ReconciliationRuleRepository;
 import com.nalitech.shared.util.DescriptionNormalizer;
 import com.nalitech.shared.util.StringSimilarity;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -61,20 +67,123 @@ public class MatchingService {
 
     private final MovementRepository movementRepository;
     private final ReconciliationRepository reconciliationRepository;
+    private final ReconciliationMatchRepository matchRepository;
     private final ReconciliationRuleRepository ruleRepository;
     private final ClassificationSuggestionService suggestionService;
+    private final CounterpartAliasService aliasService;
     private final ApplicationEventPublisher eventPublisher;
 
     public MatchingService(MovementRepository movementRepository,
                            ReconciliationRepository reconciliationRepository,
+                           ReconciliationMatchRepository matchRepository,
                            ReconciliationRuleRepository ruleRepository,
                            ClassificationSuggestionService suggestionService,
+                           CounterpartAliasService aliasService,
                            ApplicationEventPublisher eventPublisher) {
         this.movementRepository = movementRepository;
         this.reconciliationRepository = reconciliationRepository;
+        this.matchRepository = matchRepository;
         this.ruleRepository = ruleRepository;
         this.suggestionService = suggestionService;
+        this.aliasService = aliasService;
         this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * Otimizacao GLOBAL do match de um cliente/competencia (atribuicao otima aproximada).
+     *
+     * <p>O match por movimentacao (streaming) e guloso: processa uma de cada vez e pode
+     * fazer uma escolha localmente boa mas globalmente ruim quando varios lancamentos tem
+     * o MESMO valor. Este passo refaz os itens <b>ainda PENDENTES</b> considerando todos
+     * juntos: gera todos os pares validos, ordena por nota e casa de forma gulosa-ordenada
+     * (aproximacao classica de emparelhamento de peso maximo), garantindo que cada
+     * lancamento seja usado uma vez so no melhor par possivel.</p>
+     *
+     * <p>Seguro: mexe apenas em itens PENDENTES (nunca nos confirmados/rejeitados).</p>
+     */
+    public void optimize(UUID empresaId, UUID clienteId, LocalDate competencia) {
+        if (clienteId == null || competencia == null) {
+            return;
+        }
+        List<Reconciliation> pendentes = reconciliationRepository
+                .findByEmpresaIdAndClienteIdAndCompetenciaAndStatus(
+                        empresaId, clienteId, competencia, ReconciliationStatus.PENDENTE);
+        if (pendentes.size() < 2) {
+            return;
+        }
+        // Movimentacoes envolvidas (dirigentes + contrapartidas) dos itens pendentes.
+        Set<UUID> movIds = new HashSet<>();
+        for (Reconciliation r : pendentes) {
+            movIds.add(r.getMovementId());
+            if (r.getMatchedMovementId() != null) {
+                movIds.add(r.getMatchedMovementId());
+            }
+        }
+        List<Movement> movs = movementRepository.findAllById(movIds);
+
+        // Zera os itens pendentes (e pernas N:1) para reconstruir do zero.
+        List<UUID> reconIds = pendentes.stream().map(Reconciliation::getId).toList();
+        matchRepository.deleteByReconciliationIdIn(reconIds);
+        reconciliationRepository.deleteAll(pendentes);
+        for (Movement m : movs) {
+            m.setStatus(MovementStatus.NORMALIZADO);
+        }
+
+        // Todos os pares validos, ordenados por nota (melhores primeiro).
+        List<Par> pares = new ArrayList<>();
+        for (int i = 0; i < movs.size(); i++) {
+            for (int j = i + 1; j < movs.size(); j++) {
+                Movement a = movs.get(i);
+                Movement b = movs.get(j);
+                if (mesmoArquivo(a, b)) {
+                    continue;
+                }
+                double nota = nota(a, b);
+                if (nota >= LIMIAR_MATCH) {
+                    pares.add(new Par(a, b, nota));
+                }
+            }
+        }
+        pares.sort(Comparator.comparingDouble(Par::nota).reversed());
+
+        // Emparelhamento guloso-ordenado: cada movimentacao entra em no maximo um par.
+        Set<UUID> usados = new HashSet<>();
+        for (Par par : pares) {
+            if (usados.contains(par.a().getId()) || usados.contains(par.b().getId())) {
+                continue;
+            }
+            Movement dirigente = par.a();
+            Movement contrapartida = par.b();
+            if (isExtrato(contrapartida) && !isExtrato(dirigente)) {
+                dirigente = par.b();
+                contrapartida = par.a();
+            }
+            Reconciliation item = novoItem(dirigente);
+            aplicarMatch(item, dirigente, contrapartida, par.nota());
+            dirigente.setStatus(MovementStatus.CONCILIACAO_PENDENTE);
+            contrapartida.setStatus(MovementStatus.CONCILIADO);
+            gerarSugestaoConta(dirigente);
+            usados.add(par.a().getId());
+            usados.add(par.b().getId());
+        }
+
+        // Sobras: cada movimentacao sem par vira um item pendente (revisao manual).
+        for (Movement m : movs) {
+            if (usados.contains(m.getId())) {
+                continue;
+            }
+            Reconciliation item = novoItem(m);
+            item.setCamada("MANUAL");
+            item.setScore(BigDecimal.ZERO);
+            item.setMotivo("Sem correspondencia automatica: revisao manual");
+            reconciliationRepository.save(item);
+            m.setStatus(MovementStatus.CONCILIACAO_PENDENTE);
+            gerarSugestaoConta(m);
+        }
+        movementRepository.saveAll(movs);
+    }
+
+    private record Par(Movement a, Movement b, double nota) {
     }
 
     public void reconcile(Movement movement) {
@@ -106,15 +215,25 @@ public class MatchingService {
         // 2) Consegue DIRIGIR, reservando uma movimentacao livre de outro arquivo?
         Candidato livre = melhorLivrePara(movement);
         if (livre != null) {
+            Movement dirigente = movement;
             Movement contrapartida = livre.movimento();
+            // Preferir o EXTRATO como dirigente: e o lado que sera lancado na partida
+            // dobrada (Debito/Credito contra o Banco). Se a movimentacao atual e do sistema
+            // e o candidato e do extrato, inverte os papeis.
+            if (isExtrato(contrapartida) && !isExtrato(movement)) {
+                dirigente = contrapartida;
+                contrapartida = movement;
+            }
             contrapartida.setStatus(MovementStatus.CONCILIADO); // reserva
             movementRepository.save(contrapartida);
 
-            Reconciliation item = itemProprio.orElseGet(() -> novoItem(movement));
-            aplicarMatch(item, movement, contrapartida, livre.nota());
-            movement.setStatus(MovementStatus.CONCILIACAO_PENDENTE);
-            movementRepository.save(movement);
-            gerarSugestaoConta(movement);
+            Movement dirigenteFinal = dirigente;
+            Reconciliation item = reconciliationRepository.findFirstByMovementId(dirigente.getId())
+                    .orElseGet(() -> novoItem(dirigenteFinal));
+            aplicarMatch(item, dirigente, contrapartida, livre.nota());
+            dirigente.setStatus(MovementStatus.CONCILIACAO_PENDENTE);
+            movementRepository.save(dirigente);
+            gerarSugestaoConta(dirigente);
             return;
         }
 
@@ -237,7 +356,8 @@ public class MatchingService {
         if (dataScore < 0) {
             return -1;
         }
-        double nomeScore = similaridade(a, b);
+        // CNPJ/CPF igual nos dois lados: contraparte identica -> nome com nota maxima.
+        double nomeScore = mesmoDocumento(a, b) ? 1.0 : similaridade(a, b);
         double total = PESO_VALOR * valorScore + PESO_DATA * dataScore + PESO_NOME * nomeScore;
         if (papeisOpostos(a, b)) {
             total = Math.min(1.0, total + BONUS_PAPEL_OPOSTO);
@@ -248,6 +368,16 @@ public class MatchingService {
     private boolean papeisOpostos(Movement a, Movement b) {
         return a.getOrigem() != null && b.getOrigem() != null
                 && !a.getOrigem().equalsIgnoreCase(b.getOrigem());
+    }
+
+    private boolean isExtrato(Movement m) {
+        return "EXTRATO".equalsIgnoreCase(m.getOrigem());
+    }
+
+    // Mesma contraparte (CNPJ/CPF) nos dois lados = praticamente certeza do vinculo.
+    private boolean mesmoDocumento(Movement a, Movement b) {
+        return a.getDocumento() != null && !a.getDocumento().isBlank()
+                && a.getDocumento().equals(b.getDocumento());
     }
 
     private double valorScore(Movement a, Movement b) {
@@ -291,7 +421,13 @@ public class MatchingService {
         if (na.isBlank() || nb.isBlank()) {
             return 0.0;
         }
-        return Math.max(StringSimilarity.tokenSimilarity(na, nb), StringSimilarity.ratio(na, nb));
+        double base = Math.max(StringSimilarity.tokenSimilarity(na, nb), StringSimilarity.ratio(na, nb));
+        // Vinculo aprendido (apelido de contraparte): so consulta quando o nome nao bate
+        // bem por conta propria, para nao pesar. Se foi ensinado, trata como a mesma parte.
+        if (base < 0.8 && aliasService.isAlias(a.getEmpresaId(), a.getClienteId(), na, nb)) {
+            return 1.0;
+        }
+        return base;
     }
 
     private Optional<ReconciliationRule> primeiraRegra(Movement movement) {

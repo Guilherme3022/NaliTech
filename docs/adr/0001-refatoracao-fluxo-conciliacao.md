@@ -44,6 +44,23 @@ O fluxo de conciliação estava, na prática, inutilizável:
 - [x] B6. Expor `origem` no `UploadResponse` (para o front escolher/exibir).
 - [x] B7. Melhorar a IA de sugestão de conta usando a contraparte
       (CNPJ/nome) extraída da descrição — normalização de histórico.
+- [x] B15. **Atribuicao global otima** (aproximada) do match: passo `optimize` por
+      cliente/competencia que refaz os itens PENDENTES gerando todos os pares validos,
+      ordenando por nota e casando guloso-ordenado (cada lancamento usado uma vez no
+      melhor par). Roda ao fim do pipeline e via endpoint `POST /reconciliations/optimize`.
+- [x] B14. **Aprende vinculos manuais** (apelidos de contraparte): ao confirmar um
+      match, guarda que o nome do extrato e o do sistema sao a mesma parte
+      (`counterpart_aliases`, V35); o match automatico futuro usa isso como sinal forte.
+- [x] B13. IA de classificacao **aprende por CNPJ/CPF** (chave exata, alem do nome):
+      mesma contraparte reconhecida mesmo com variacao de grafia; sugestao por CNPJ
+      tem confianca maior. Fallback por similaridade de nome mantido.
+- [x] B12. **Conta bancaria por extrato** (migration V34): upload/movimento guardam
+      `bank_account_id`; `DoubleEntryService` usa a conta do banco correto na partida
+      dobrada (corrige clientes com varios bancos), com fallback para o banco padrao.
+- [x] B11. IA: captura da **contraparte + CNPJ/CPF** da linha seguinte no extrato BB
+      (antes perdida) -> match por nome e sugestao de conta muito melhores; bonus de
+      score quando CNPJ bate nos dois lados; preferencia do **extrato como dirigente**
+      do item (lado lancado na partida dobrada).
 - [x] B10. Match **independente do papel do documento**: casa entre arquivos
       diferentes (uploadId distinto) do mesmo cliente mesmo sem marcar extrato/sistema
       (papel vira bonus no score). Modelo simetrico com item unico por par (dirigente +

@@ -20,6 +20,7 @@ public final class MovementDtos {
             MovementType tipo,
             String documento,
             String banco,
+            String origem,
             UUID contaDebitoId,
             UUID contaCreditoId,
             MovementStatus status) {

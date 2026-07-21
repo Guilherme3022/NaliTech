@@ -40,6 +40,10 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
     long countByEmpresaIdAndClienteIdAndStatus(UUID empresaId, UUID clienteId,
                                                ReconciliationStatus status);
 
+    // Itens de um cliente/competencia num status (otimizacao global do match).
+    List<Reconciliation> findByEmpresaIdAndClienteIdAndCompetenciaAndStatus(
+            UUID empresaId, UUID clienteId, LocalDate competencia, ReconciliationStatus status);
+
     Page<Reconciliation> findByEmpresaIdAndStatus(UUID empresaId, ReconciliationStatus status,
                                                   Pageable pageable);
 

@@ -31,7 +31,7 @@ public class PortalController {
     @PostMapping(value = "/uploads", consumes = "multipart/form-data")
     @ResponseStatus(HttpStatus.CREATED)
     public UploadResponse upload(@RequestParam("file") MultipartFile file) {
-        return uploadService.upload(file, currentClienteId(), null);
+        return uploadService.upload(file, currentClienteId(), null, null);
     }
 
     @GetMapping("/status")

@@ -14,6 +14,7 @@ import com.nalitech.modules.movement.entity.MovementStatus;
 import com.nalitech.modules.movement.repository.MovementRepository;
 import com.nalitech.modules.reconciliation.entity.Reconciliation;
 import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
+import com.nalitech.modules.reconciliation.repository.ReconciliationMatchRepository;
 import com.nalitech.modules.reconciliation.repository.ReconciliationRepository;
 import com.nalitech.modules.reconciliation.repository.ReconciliationRuleRepository;
 import java.math.BigDecimal;
@@ -40,9 +41,13 @@ class MatchingServiceTest {
     @Mock
     private ReconciliationRepository reconciliationRepository;
     @Mock
+    private ReconciliationMatchRepository matchRepository;
+    @Mock
     private ReconciliationRuleRepository ruleRepository;
     @Mock
     private ClassificationSuggestionService suggestionService;
+    @Mock
+    private CounterpartAliasService aliasService;
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
@@ -53,8 +58,8 @@ class MatchingServiceTest {
     @BeforeEach
     void setUp() {
         matchingService = new MatchingService(
-                movementRepository, reconciliationRepository, ruleRepository,
-                suggestionService, eventPublisher);
+                movementRepository, reconciliationRepository, matchRepository, ruleRepository,
+                suggestionService, aliasService, eventPublisher);
         // Defaults seguros para os caminhos nao exercitados por cada teste.
         when(reconciliationRepository.findFirstByMovementId(any())).thenReturn(Optional.empty());
         when(reconciliationRepository.findByEmpresaIdAndClienteIdAndStatusAndMatchedMovementIdIsNull(
@@ -165,6 +170,47 @@ class MatchingServiceTest {
         assertThat(pendente.getMatchedMovementId()).isEqualTo(chegando.getId());
         assertThat(chegando.getStatus()).isEqualTo(MovementStatus.CONCILIADO);
         verify(reconciliationRepository).save(pendente);
+    }
+
+    @Test
+    void otimizacaoGlobalEscolheOParCertoEntreValoresIguais() {
+        java.time.LocalDate data = LocalDate.of(2026, 2, 10);
+        java.util.UUID uploadX = UUID.randomUUID();
+        java.util.UUID uploadY = UUID.randomUUID();
+        Movement e1 = movimento(uploadX, "EXTRATO", "PIX NESTLE", data, new BigDecimal("-100.00"));
+        Movement e2 = movimento(uploadX, "EXTRATO", "PIX ALIBEM", data, new BigDecimal("-100.00"));
+        Movement s1 = movimento(uploadY, "SISTEMA", "NESTLE BRASIL", data, new BigDecimal("-100.00"));
+        Movement s2 = movimento(uploadY, "SISTEMA", "ALIBEM COMERCIAL", data, new BigDecimal("-100.00"));
+        // Estado inicial "errado": E1<->S2 e E2<->S1.
+        Reconciliation i1 = itemPendente(e1.getId(), s2.getId());
+        Reconciliation i2 = itemPendente(e2.getId(), s1.getId());
+        when(reconciliationRepository.findByEmpresaIdAndClienteIdAndCompetenciaAndStatus(
+                empresaId, clienteId, LocalDate.of(2026, 2, 1), ReconciliationStatus.PENDENTE))
+                .thenReturn(List.of(i1, i2));
+        when(movementRepository.findAllById(any())).thenReturn(List.of(e1, e2, s1, s2));
+
+        matchingService.optimize(empresaId, clienteId, LocalDate.of(2026, 2, 1));
+
+        ArgumentCaptor<Reconciliation> captor = ArgumentCaptor.forClass(Reconciliation.class);
+        verify(reconciliationRepository, org.mockito.Mockito.atLeast(2)).save(captor.capture());
+        // Deve reparear pelos nomes: E1<->S1 e E2<->S2.
+        boolean e1s1 = captor.getAllValues().stream().anyMatch(
+                r -> e1.getId().equals(r.getMovementId()) && s1.getId().equals(r.getMatchedMovementId()));
+        boolean e2s2 = captor.getAllValues().stream().anyMatch(
+                r -> e2.getId().equals(r.getMovementId()) && s2.getId().equals(r.getMatchedMovementId()));
+        assertThat(e1s1).isTrue();
+        assertThat(e2s2).isTrue();
+    }
+
+    private Reconciliation itemPendente(UUID movementId, UUID matchedId) {
+        Reconciliation r = new Reconciliation();
+        r.setId(UUID.randomUUID());
+        r.setEmpresaId(empresaId);
+        r.setClienteId(clienteId);
+        r.setMovementId(movementId);
+        r.setMatchedMovementId(matchedId);
+        r.setStatus(ReconciliationStatus.PENDENTE);
+        return r;
     }
 
     @Test

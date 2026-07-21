@@ -89,6 +89,13 @@ public class ReconciliationController {
         return reconciliationService.groupMatch(id, request);
     }
 
+    // Otimizacao global do match dos itens pendentes (atribuicao otima aproximada).
+    @PostMapping("/optimize")
+    public void optimize(@RequestParam UUID clienteId,
+                         @RequestParam String competencia) {
+        reconciliationService.optimize(clienteId, parseCompetencia(competencia));
+    }
+
     // Resumo do lote (por status: quantidade e soma dos valores).
     @GetMapping("/summary")
     public ReconciliationSummary summary(

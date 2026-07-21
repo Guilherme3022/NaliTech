@@ -36,6 +36,10 @@ final class LineMovementExtractor {
     private static final Pattern NOISE = Pattern.compile(MONEY + "\\s*[CD]?|\\d{2}/\\d{2}/\\d{4}|R\\$");
     private static final Pattern SALDO = Pattern.compile(
             "(?i)saldo\\s+(anterior|do\\s+dia|dia|atual|final|em\\s+conta)|total\\s+(geral|do\\s+periodo)");
+    // CNPJ/CPF (formatado ou 14 digitos): identifica a contraparte, que em muitos extratos
+    // (ex.: Banco do Brasil) vem na LINHA SEGUINTE ao lancamento.
+    private static final Pattern DOCUMENTO = Pattern.compile(
+            "(\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}|\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}|\\b\\d{14}\\b)");
 
     // ---- Formato Banrisul (dia isolado + cabecalho de mes; debito com sinal no fim) ----
     private static final Pattern BANRISUL_MES = Pattern.compile("MOVIMENTOS\\s+([A-Z]{3})/(\\d{4})");
@@ -72,9 +76,43 @@ final class LineMovementExtractor {
             RawMovement movement = extractGenericLine(rawLine);
             if (movement != null) {
                 movements.add(movement);
+                continue;
+            }
+            // Linha sem lancamento, mas com CNPJ/CPF: e a contraparte do ultimo lancamento
+            // (padrao do extrato do BB). Enriquece a descricao e guarda o documento — o que
+            // melhora muito o match por nome e a sugestao de conta.
+            if (!movements.isEmpty()) {
+                Contraparte c = contraparteDe(rawLine);
+                if (c != null) {
+                    RawMovement prev = movements.get(movements.size() - 1);
+                    String desc = ((prev.descricao() == null ? "" : prev.descricao()) + " " + c.nome)
+                            .replaceAll("\\s+", " ").trim();
+                    String doc = prev.documento() != null ? prev.documento() : c.documento;
+                    movements.set(movements.size() - 1,
+                            new RawMovement(prev.data(), prev.valor(), desc.isBlank() ? null : desc, doc));
+                }
             }
         }
         return movements;
+    }
+
+    private record Contraparte(String nome, String documento) {
+    }
+
+    private static Contraparte contraparteDe(String line) {
+        Matcher doc = DOCUMENTO.matcher(line);
+        if (!doc.find()) {
+            return null;
+        }
+        String documento = doc.group(1).replaceAll("[^0-9]", "");
+        // Nome = parte textual (remove CNPJ/CPF, numeros de agencia/lote/documento e ruido).
+        String nome = line
+                .replaceAll("\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}|\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", " ")
+                .replaceAll("\\b\\d+\\b", " ")
+                .replaceAll("[^A-Za-z\\u00C0-\\u00FF ]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return new Contraparte(nome, documento);
     }
 
     private static RawMovement extractGenericLine(String line) {

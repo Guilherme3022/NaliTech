@@ -3,6 +3,7 @@ package com.nalitech.modules.account.ai;
 import com.nalitech.modules.account.entity.ChartOfAccount;
 import com.nalitech.modules.account.entity.LearningHistory;
 import com.nalitech.modules.account.repository.LearningHistoryRepository;
+import com.nalitech.modules.account.service.LearningService;
 import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.shared.util.DescriptionNormalizer;
 import com.nalitech.shared.util.StringSimilarity;
@@ -34,11 +35,25 @@ public class HeuristicSuggestionProvider implements AiSuggestionProvider {
 
     @Override
     public Optional<SuggestedAccount> suggest(Movement movement, List<ChartOfAccount> contas) {
+        // 1) Match exato pela contraparte (CNPJ/CPF): mais confiavel que o nome.
+        String docKey = LearningService.documentoKey(movement.getDocumento());
+        if (docKey != null) {
+            Optional<SuggestedAccount> porDocumento = learningRepository
+                    .findScoped(movement.getEmpresaId(), movement.getClienteId(), docKey)
+                    .map(h -> new SuggestedAccount(h.getContaId(),
+                            BigDecimal.valueOf(Math.min(95, 75 + h.getOcorrencias() * 5))));
+            if (porDocumento.isPresent()) {
+                return porDocumento;
+            }
+        }
+
+        // 2) Fallback por similaridade de nome/descricao.
         String alvo = DescriptionNormalizer.normalize(movement.getDescricao());
         if (alvo.isBlank()) {
             return Optional.empty();
         }
         return learningRepository.findByScope(movement.getEmpresaId(), movement.getClienteId()).stream()
+                .filter(h -> !h.getDescricaoPadrao().startsWith("#")) // ignora chaves de CNPJ
                 .filter(h -> StringSimilarity.tokenSimilarity(alvo, h.getDescricaoPadrao())
                         >= HISTORY_THRESHOLD)
                 .max((a, b) -> Integer.compare(a.getOcorrencias(), b.getOcorrencias()))

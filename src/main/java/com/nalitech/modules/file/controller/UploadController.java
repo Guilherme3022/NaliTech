@@ -35,8 +35,9 @@ public class UploadController {
     @ResponseStatus(HttpStatus.CREATED)
     public UploadResponse upload(@RequestParam("file") MultipartFile file,
                                  @RequestParam(value = "clienteId") UUID clienteId,
-                                 @RequestParam(value = "origem", required = false) OrigemDocumento origem) {
-        return uploadService.upload(file, clienteId, origem);
+                                 @RequestParam(value = "origem", required = false) OrigemDocumento origem,
+                                 @RequestParam(value = "bankAccountId", required = false) UUID bankAccountId) {
+        return uploadService.upload(file, clienteId, origem, bankAccountId);
     }
 
     @GetMapping

@@ -21,6 +21,7 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
             select m from Movement m
             where m.empresaId = :empresaId
               and (cast(:clienteId as string) is null or m.clienteId = :clienteId)
+              and (cast(:origem as string) is null or m.origem = :origem)
               and (cast(:inicio as string) is null or m.data >= :inicio)
               and (cast(:fim as string) is null or m.data <= :fim)
             order by m.data desc
@@ -28,6 +29,7 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
     org.springframework.data.domain.Page<Movement> search(
             @Param("empresaId") UUID empresaId,
             @Param("clienteId") UUID clienteId,
+            @Param("origem") String origem,
             @Param("inicio") LocalDate inicio,
             @Param("fim") LocalDate fim,
             org.springframework.data.domain.Pageable pageable);

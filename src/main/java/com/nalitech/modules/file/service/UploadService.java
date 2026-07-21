@@ -95,6 +95,7 @@ public class UploadService {
         novo.setFileId(saved.getId());
         novo.setConciliacaoId(original.getConciliacaoId());
         novo.setOrigem(original.getOrigem());
+        novo.setBankAccountId(original.getBankAccountId());
         novo.setVersao(original.getVersao() + 1);
         novo.setStatus(UploadStatus.RECEBIDO);
         Upload persistedNovo = uploadRepository.save(novo);
@@ -109,7 +110,8 @@ public class UploadService {
         return toResponse(persistedNovo, saved);
     }
 
-    public UploadResponse upload(MultipartFile file, UUID clienteId, OrigemDocumento origem) {
+    public UploadResponse upload(MultipartFile file, UUID clienteId, OrigemDocumento origem,
+                                 UUID bankAccountId) {
         validate(file);
         UUID empresaId = SecurityUtils.requireEmpresaId();
         OrigemDocumento papel = origem != null ? origem : OrigemDocumento.EXTRATO;
@@ -133,7 +135,7 @@ public class UploadService {
         storageService.store(storageKey, content, file.getContentType());
 
         FileEntity saved = persistFile(file, empresaId, clienteId, hash, storageKey, content.length);
-        Upload upload = persistUpload(empresaId, clienteId, saved.getId(), papel);
+        Upload upload = persistUpload(empresaId, clienteId, saved.getId(), papel, bankAccountId);
 
         eventPublisher.publishEvent(new ArquivoRecebidoEvent(
                 upload.getId(), empresaId, saved.getId(), clienteId,
@@ -230,12 +232,14 @@ public class UploadService {
         return fileRepository.save(entity);
     }
 
-    private Upload persistUpload(UUID empresaId, UUID clienteId, UUID fileId, OrigemDocumento origem) {
+    private Upload persistUpload(UUID empresaId, UUID clienteId, UUID fileId, OrigemDocumento origem,
+                                 UUID bankAccountId) {
         Upload upload = new Upload();
         upload.setEmpresaId(empresaId);
         upload.setClienteId(clienteId);
         upload.setFileId(fileId);
         upload.setOrigem(origem);
+        upload.setBankAccountId(bankAccountId);
         upload.setStatus(UploadStatus.RECEBIDO);
         return uploadRepository.save(upload);
     }
@@ -251,7 +255,8 @@ public class UploadService {
 
     private UploadResponse toResponse(Upload upload, FileEntity file) {
         return new UploadResponse(upload.getId(), file.getId(), upload.getClienteId(),
-                upload.getOrigem(), file.getNomeOriginal(), file.getTipoMime(), file.getTamanho(),
+                upload.getOrigem(), upload.getBankAccountId(), file.getNomeOriginal(),
+                file.getTipoMime(), file.getTamanho(),
                 upload.getStatus(), upload.getEtapaAtual(), upload.getErroMensagem(),
                 upload.getCreatedAt());
     }

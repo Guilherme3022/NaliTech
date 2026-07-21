@@ -29,7 +29,7 @@ public class DoubleEntryService {
     }
 
     public void applyCounterpart(Movement movement, UUID contrapartidaContaId) {
-        UUID contaBanco = resolveContaBanco(movement.getEmpresaId(), movement.getClienteId());
+        UUID contaBanco = resolveContaBanco(movement);
         if (isEntrada(movement)) {
             movement.setContaDebitoId(contaBanco);
             movement.setContaCreditoId(contrapartidaContaId);
@@ -39,9 +39,20 @@ public class DoubleEntryService {
         }
     }
 
-    private UUID resolveContaBanco(UUID empresaId, UUID clienteId) {
-        // Banco padrao especifico do cliente tem prioridade; senao usa o compartilhado.
-        return bankAccountRepository.findDefaultsApplicable(empresaId, clienteId).stream()
+    private UUID resolveContaBanco(Movement movement) {
+        // 1) Banco especifico do extrato (quando o cliente tem varios bancos) tem prioridade.
+        if (movement.getBankAccountId() != null) {
+            UUID conta = bankAccountRepository
+                    .findByIdAndEmpresaId(movement.getBankAccountId(), movement.getEmpresaId())
+                    .map(BankAccount::getContaContabilId)
+                    .orElse(null);
+            if (conta != null) {
+                return conta;
+            }
+        }
+        // 2) Senao, banco padrao do cliente (especifico tem prioridade sobre o compartilhado).
+        return bankAccountRepository
+                .findDefaultsApplicable(movement.getEmpresaId(), movement.getClienteId()).stream()
                 .findFirst()
                 .map(BankAccount::getContaContabilId)
                 .orElse(null);

@@ -52,6 +52,8 @@ public class ReconciliationService {
     private final ChartOfAccountRepository chartOfAccountRepository;
     private final AiSuggestionRepository aiSuggestionRepository;
     private final ReconciliationMatchRepository matchRepository;
+    private final MatchingService matchingService;
+    private final CounterpartAliasService aliasService;
     private final ApplicationEventPublisher eventPublisher;
 
     public ReconciliationService(ReconciliationRepository reconciliationRepository,
@@ -59,13 +61,22 @@ public class ReconciliationService {
                                  ChartOfAccountRepository chartOfAccountRepository,
                                  AiSuggestionRepository aiSuggestionRepository,
                                  ReconciliationMatchRepository matchRepository,
+                                 MatchingService matchingService,
+                                 CounterpartAliasService aliasService,
                                  ApplicationEventPublisher eventPublisher) {
         this.reconciliationRepository = reconciliationRepository;
         this.movementRepository = movementRepository;
         this.chartOfAccountRepository = chartOfAccountRepository;
         this.aiSuggestionRepository = aiSuggestionRepository;
         this.matchRepository = matchRepository;
+        this.matchingService = matchingService;
+        this.aliasService = aliasService;
         this.eventPublisher = eventPublisher;
+    }
+
+    /** Reprocessa (otimiza) o match dos itens ainda pendentes de um cliente/competencia. */
+    public void optimize(UUID clienteId, LocalDate competencia) {
+        matchingService.optimize(SecurityUtils.currentEmpresaId(), clienteId, competencia);
     }
 
     @Transactional(readOnly = true)
@@ -92,6 +103,8 @@ public class ReconciliationService {
         reconciliationRepository.save(reconciliation);
 
         updateMovementStatus(reconciliation.getMovementId(), MovementStatus.CONCILIADO);
+        // Aprende o vinculo (apelido de contraparte) quando ha correspondencia.
+        aprenderVinculo(reconciliation);
 
         eventPublisher.publishEvent(new ConciliacaoConfirmadaEvent(
                 reconciliation.getId(), reconciliation.getEmpresaId(),
@@ -236,6 +249,19 @@ public class ReconciliationService {
                     "A conta '" + conta.getCodigo() + " - " + conta.getNome() + "' e sintetica "
                     + "(agrupadora) e nao pode receber lancamento. Escolha uma conta analitica.",
                     HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    // Grava que o nome do extrato e o do sistema sao a mesma contraparte (aprendizado).
+    private void aprenderVinculo(Reconciliation reconciliation) {
+        if (reconciliation.getMatchedMovementId() == null) {
+            return;
+        }
+        Movement extrato = movementRepository.findById(reconciliation.getMovementId()).orElse(null);
+        Movement sistema = movementRepository.findById(reconciliation.getMatchedMovementId()).orElse(null);
+        if (extrato != null && sistema != null) {
+            aliasService.record(reconciliation.getEmpresaId(), reconciliation.getClienteId(),
+                    extrato.getDescricao(), sistema.getDescricao());
         }
     }
 

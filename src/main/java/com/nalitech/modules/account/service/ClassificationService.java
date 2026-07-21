@@ -78,7 +78,8 @@ public class ClassificationService {
         movement.setStatus(MovementStatus.CLASSIFICADO);
         movementRepository.save(movement);
 
-        learningService.recordDecision(empresaId, movement.getClienteId(), movement.getDescricao(), contaId);
+        learningService.recordDecision(empresaId, movement.getClienteId(),
+                movement.getDescricao(), movement.getDocumento(), contaId);
     }
 
     /** Ajuste manual do lancamento: define debito e credito diretamente. */
