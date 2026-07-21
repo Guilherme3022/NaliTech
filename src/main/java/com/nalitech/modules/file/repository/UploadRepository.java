@@ -34,6 +34,9 @@ public interface UploadRepository extends JpaRepository<Upload, UUID> {
 
     long countByConciliacaoId(UUID conciliacaoId);
 
+    // Quantos uploads do lote ainda estao em processamento (status nao final).
+    long countByConciliacaoIdAndStatusIn(UUID conciliacaoId, java.util.Collection<UploadStatus> statuses);
+
     long countByEmpresaIdAndCreatedAtAfter(UUID empresaId, OffsetDateTime after);
 
     java.util.List<Upload> findTop10ByEmpresaIdOrderByCreatedAtDesc(UUID empresaId);
