@@ -25,8 +25,8 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
               and (cast(:inicio as string) is null or m.data >= :inicio)
               and (cast(:fim as string) is null or m.data <= :fim)
               and (cast(:q as string) is null
-                   or lower(m.descricao) like lower(concat('%', :q, '%'))
-                   or lower(m.documento) like lower(concat('%', :q, '%')))
+                   or lower(m.descricao) like lower(concat('%', cast(:q as string), '%'))
+                   or lower(m.documento) like lower(concat('%', cast(:q as string), '%')))
             order by m.data desc
             """)
     org.springframework.data.domain.Page<Movement> search(
