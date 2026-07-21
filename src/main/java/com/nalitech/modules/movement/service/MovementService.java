@@ -33,12 +33,13 @@ public class MovementService {
     }
 
     @Transactional(readOnly = true)
-    public Page<MovementResponse> list(UUID clienteId, String origem, LocalDate competencia,
+    public Page<MovementResponse> list(UUID clienteId, String origem, String q, LocalDate competencia,
                                        Pageable pageable) {
         LocalDate inicio = competencia;
         LocalDate fim = competencia == null ? null : competencia.plusMonths(1).minusDays(1);
+        String termo = (q == null || q.isBlank()) ? null : q.trim();
         return movementRepository
-                .search(SecurityUtils.currentEmpresaId(), clienteId, origem, inicio, fim, pageable)
+                .search(SecurityUtils.currentEmpresaId(), clienteId, origem, inicio, fim, termo, pageable)
                 .map(this::toResponse);
     }
 

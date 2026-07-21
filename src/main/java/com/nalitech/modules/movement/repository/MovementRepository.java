@@ -24,6 +24,9 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
               and (cast(:origem as string) is null or m.origem = :origem)
               and (cast(:inicio as string) is null or m.data >= :inicio)
               and (cast(:fim as string) is null or m.data <= :fim)
+              and (cast(:q as string) is null
+                   or lower(m.descricao) like lower(concat('%', :q, '%'))
+                   or lower(m.documento) like lower(concat('%', :q, '%')))
             order by m.data desc
             """)
     org.springframework.data.domain.Page<Movement> search(
@@ -32,6 +35,7 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
             @Param("origem") String origem,
             @Param("inicio") LocalDate inicio,
             @Param("fim") LocalDate fim,
+            @Param("q") String q,
             org.springframework.data.domain.Pageable pageable);
 
     List<Movement> findByUploadId(UUID uploadId);
