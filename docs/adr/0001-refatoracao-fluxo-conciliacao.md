@@ -44,6 +44,13 @@ O fluxo de conciliação estava, na prática, inutilizável:
 - [x] B6. Expor `origem` no `UploadResponse` (para o front escolher/exibir).
 - [x] B7. Melhorar a IA de sugestão de conta usando a contraparte
       (CNPJ/nome) extraída da descrição — normalização de histórico.
+- [x] B10. Match **independente do papel do documento**: casa entre arquivos
+      diferentes (uploadId distinto) do mesmo cliente mesmo sem marcar extrato/sistema
+      (papel vira bonus no score). Modelo simetrico com item unico por par (dirigente +
+      contrapartida), sem duplicar. Corrige o "zero match" quando os papeis nao eram marcados.
+- [x] B9. IA de match turbinada: score valor+data+nome (0..1) com tolerancia de
+      valor (2%) resgatada por nome forte, janela de 7 dias, e sugestao de conta
+      **proativa** (regra+aprendizado, sem custo de LLM) ja pre-preenchida no item.
 - [x] B8. Suporte ao layout **Banrisul** (dia isolado + cabecalho de mes;
       debito com sinal de menos no fim; contraparte na linha `NOME:`).
       Dispatcher no `LineMovementExtractor` + teste unitario cobrindo os dois

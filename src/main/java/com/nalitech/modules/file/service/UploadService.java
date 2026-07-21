@@ -10,6 +10,7 @@ import com.nalitech.modules.client.repository.ClientRepository;
 import com.nalitech.modules.file.repository.FileRepository;
 import com.nalitech.modules.file.repository.UploadRepository;
 import com.nalitech.modules.movement.entity.Movement;
+import com.nalitech.modules.movement.entity.MovementStatus;
 import com.nalitech.modules.movement.repository.MovementRepository;
 import com.nalitech.modules.reconciliation.entity.ConciliacaoSituacao;
 import com.nalitech.modules.reconciliation.repository.ConciliacaoRepository;
@@ -176,6 +177,26 @@ public class UploadService {
         List<Movement> movimentos = movementRepository.findByUploadId(upload.getId());
         if (!movimentos.isEmpty()) {
             List<UUID> movimentoIds = movimentos.stream().map(Movement::getId).toList();
+
+            // Se este arquivo era o EXTRATO, os itens de conciliacao reservaram
+            // movimentacoes do SISTEMA (status CONCILIADO). Libera essas reservas.
+            for (var recon : reconciliationRepository.findByMovementIdIn(movimentoIds)) {
+                if (recon.getMatchedMovementId() != null) {
+                    movementRepository.findById(recon.getMatchedMovementId()).ifPresent(sistema -> {
+                        sistema.setStatus(MovementStatus.NORMALIZADO);
+                        movementRepository.save(sistema);
+                    });
+                }
+            }
+            // Se este arquivo era o SISTEMA, desfaz a associacao nos itens de extrato
+            // que apontavam para estas movimentacoes (voltam a ficar pendentes).
+            for (var recon : reconciliationRepository.findByMatchedMovementIdIn(movimentoIds)) {
+                recon.setMatchedMovementId(null);
+                recon.setCamada("MANUAL");
+                recon.setMotivo("Correspondencia removida (arquivo do sistema excluido)");
+                reconciliationRepository.save(recon);
+            }
+
             matchRepository.deleteByMovementIdIn(movimentoIds);
             reconciliationRepository.deleteByMovementIdIn(movimentoIds);
             movementRepository.deleteAll(movimentos);

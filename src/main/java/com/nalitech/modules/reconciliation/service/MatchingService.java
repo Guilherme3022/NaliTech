@@ -1,5 +1,6 @@
 package com.nalitech.modules.reconciliation.service;
 
+import com.nalitech.modules.account.service.ClassificationSuggestionService;
 import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.modules.movement.entity.MovementStatus;
 import com.nalitech.modules.movement.repository.MovementRepository;
@@ -9,172 +10,293 @@ import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
 import com.nalitech.modules.reconciliation.event.ConciliacaoEvents.ConciliacaoPendenteEvent;
 import com.nalitech.modules.reconciliation.repository.ReconciliationRepository;
 import com.nalitech.modules.reconciliation.repository.ReconciliationRuleRepository;
+import com.nalitech.shared.util.DescriptionNormalizer;
 import com.nalitech.shared.util.StringSimilarity;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Conciliacao extrato x sistema.
+ * Conciliacao (o "cerebro" da conciliacao) — casamento <b>simetrico e independente do
+ * papel do documento</b>.
  *
- * <p>Modelo: cada item de conciliacao ({@link Reconciliation}) e dirigido por uma linha
- * de <b>EXTRATO</b> (lado banco) e casado com a melhor movimentacao do <b>SISTEMA</b>
- * (contas a pagar/receber). Movimentacoes de origem SISTEMA NAO geram item proprio —
- * elas preenchem itens de extrato pendentes. Assim a ordem de upload nao importa:
- * se o extrato chega primeiro, fica pendente e e preenchido quando o sistema chega
- * (e vice-versa).</p>
+ * <p>Cada par conciliado tem exatamente UM item ({@link Reconciliation}): um lado e o
+ * "dirigente" ({@code movementId}) e o outro a "contrapartida" ({@code matchedMovementId}).
+ * Uma movimentacao pode: dirigir um item, ser contrapartida de um item (status
+ * {@link MovementStatus#CONCILIADO}) ou ficar pendente (dirigente sem contrapartida).</p>
  *
- * <p>Criterio de match: mesmo <b>valor com sinal</b> (pagamento no banco = -X casa com
- * conta a pagar = -X), <b>data dentro de uma janela</b> (data do banco e a de pagamento
- * do sistema costumam diferir alguns dias) e <b>similaridade de descricao/contraparte</b>
- * como desempate.</p>
+ * <p><b>Por que independente de papel:</b> a versao anterior so casava EXTRATO com SISTEMA
+ * e exigia que o usuario marcasse cada arquivo. Se ele esquecia (os dois viravam EXTRATO),
+ * dava <b>zero match</b>. Agora casamos qualquer movimentacao com a de <b>outro arquivo</b>
+ * do mesmo cliente; o papel vira apenas um pequeno <b>bonus</b> no score quando os lados
+ * sao opostos. Assim casa mesmo sem marcar os papeis, e continua sem casar linhas do mesmo
+ * arquivo entre si.</p>
+ *
+ * <p><b>Score (0..1):</b> valor (peso {@value #PESO_VALOR}, com tolerancia de
+ * {@value #TOLERANCIA_VALOR_PCT} para tarifas/centavos, sinais opostos descartam),
+ * data (peso {@value #PESO_DATA}, janela de {@value #JANELA_DIAS} dias) e nome/contraparte
+ * (peso {@value #PESO_NOME}, Jaccard + razao). So casa acima de {@value #LIMIAR_MATCH}.</p>
  */
+@Slf4j
 @Service
 @Transactional
 public class MatchingService {
 
-    // Janela de dias entre a data do extrato e a data do lancamento no sistema.
-    private static final int JANELA_DIAS = 5;
+    private static final int JANELA_DIAS = 7;
+    private static final double TOLERANCIA_VALOR_PCT = 0.02;
+    private static final double LIMIAR_MATCH = 0.5;
+
+    private static final double PESO_VALOR = 0.55;
+    private static final double PESO_DATA = 0.20;
+    private static final double PESO_NOME = 0.25;
+    // Bonus quando os papeis sao opostos (extrato x sistema) — reforca a direcao certa
+    // sem exigir o papel. Somado ao score final (limitado a 1.0).
+    private static final double BONUS_PAPEL_OPOSTO = 0.05;
 
     private final MovementRepository movementRepository;
     private final ReconciliationRepository reconciliationRepository;
     private final ReconciliationRuleRepository ruleRepository;
+    private final ClassificationSuggestionService suggestionService;
     private final ApplicationEventPublisher eventPublisher;
 
     public MatchingService(MovementRepository movementRepository,
                            ReconciliationRepository reconciliationRepository,
                            ReconciliationRuleRepository ruleRepository,
+                           ClassificationSuggestionService suggestionService,
                            ApplicationEventPublisher eventPublisher) {
         this.movementRepository = movementRepository;
         this.reconciliationRepository = reconciliationRepository;
         this.ruleRepository = ruleRepository;
+        this.suggestionService = suggestionService;
         this.eventPublisher = eventPublisher;
     }
 
     public void reconcile(Movement movement) {
-        // Lado sistema: nao cria item proprio; tenta preencher um item de extrato pendente.
-        if (isSistema(movement)) {
-            preencherExtratoPendente(movement);
+        if (movement.getClienteId() == null || movement.getData() == null || movement.getValor() == null) {
+            garantirPendente(movement);
+            return;
+        }
+        // Ja e contrapartida de um item (reservada): nada a fazer.
+        if (movement.getStatus() == MovementStatus.CONCILIADO) {
+            return;
+        }
+        Optional<Reconciliation> itemProprio = reconciliationRepository.findFirstByMovementId(movement.getId());
+        // Ja dirige um item que ja esta casado: nada a fazer.
+        if (itemProprio.isPresent() && itemProprio.get().getMatchedMovementId() != null) {
             return;
         }
 
-        // Lado extrato: cria/atualiza o item de conciliacao.
-        Reconciliation result = matchSistema(movement)
-                .or(() -> matchByRules(movement))
-                .orElseGet(() -> pendingWithoutMatch(movement));
-
-        movement.setStatus(MovementStatus.CONCILIACAO_PENDENTE);
-        movementRepository.save(movement);
-        reconciliationRepository.save(result);
-
-        if (result.getMatchedMovementId() == null) {
-            eventPublisher.publishEvent(new ConciliacaoPendenteEvent(
-                    result.getId(), result.getEmpresaId(), movement.getId(), result.getMotivo()));
-        }
-    }
-
-    private boolean isSistema(Movement movement) {
-        return "SISTEMA".equalsIgnoreCase(movement.getOrigem());
-    }
-
-    /** Busca no lado sistema a melhor movimentacao para esta linha de extrato. */
-    private Optional<Reconciliation> matchSistema(Movement extrato) {
-        if (extrato.getClienteId() == null || extrato.getData() == null || extrato.getValor() == null) {
-            return Optional.empty();
-        }
-        List<Movement> candidatos = movementRepository.findSistemaCandidates(
-                extrato.getEmpresaId(), extrato.getClienteId(), extrato.getValor(),
-                extrato.getData().minusDays(JANELA_DIAS), extrato.getData().plusDays(JANELA_DIAS));
-
-        Movement melhor = null;
-        double melhorSim = -1;
-        long melhorDiff = Long.MAX_VALUE;
-        for (Movement candidato : candidatos) {
-            // Nao reaproveita um lancamento do sistema ja casado com outro extrato.
-            if (reconciliationRepository.existsByMatchedMovementId(candidato.getId())) {
-                continue;
-            }
-            double sim = similaridade(extrato, candidato);
-            long diff = diasEntre(extrato, candidato);
-            if (sim > melhorSim || (sim == melhorSim && diff < melhorDiff)) {
-                melhor = candidato;
-                melhorSim = sim;
-                melhorDiff = diff;
-            }
-        }
-        if (melhor == null) {
-            return Optional.empty();
-        }
-        melhor.setStatus(MovementStatus.CONCILIADO); // reserva o lancamento do sistema
-        movementRepository.save(melhor);
-
-        String camada = melhorDiff == 0 ? "EXATA" : "APROXIMADA";
-        // Valor ja confere (100%); a similaridade da contraparte ajusta a confianca.
-        BigDecimal score = BigDecimal.valueOf(Math.round((0.6 + 0.4 * Math.max(0, melhorSim)) * 100));
-        String motivo = melhorDiff == 0
-                ? "Match exato extrato x sistema (data e valor)"
-                : "Match aproximado extrato x sistema (valor confere, data +/-" + melhorDiff + "d)";
-        return Optional.of(build(extrato, melhor.getId(), camada, score, motivo));
-    }
-
-    /** Quando uma movimentacao do sistema chega, tenta fechar um item de extrato pendente. */
-    private void preencherExtratoPendente(Movement sistema) {
-        if (sistema.getClienteId() == null || sistema.getData() == null || sistema.getValor() == null) {
+        // 1) Esta movimentacao consegue FECHAR um item pendente de outra (contrapartida)?
+        Reconciliation alvoParaFechar = melhorItemPendentePara(movement);
+        if (alvoParaFechar != null) {
+            fecharComContrapartida(alvoParaFechar, movement);
+            // Se esta movimentacao ja tinha um item proprio ainda sem par, remove
+            // (ela agora e contrapartida, nao deve tambem dirigir um item).
+            itemProprio.filter(i -> i.getMatchedMovementId() == null)
+                    .ifPresent(reconciliationRepository::delete);
             return;
         }
+
+        // 2) Consegue DIRIGIR, reservando uma movimentacao livre de outro arquivo?
+        Candidato livre = melhorLivrePara(movement);
+        if (livre != null) {
+            Movement contrapartida = livre.movimento();
+            contrapartida.setStatus(MovementStatus.CONCILIADO); // reserva
+            movementRepository.save(contrapartida);
+
+            Reconciliation item = itemProprio.orElseGet(() -> novoItem(movement));
+            aplicarMatch(item, movement, contrapartida, livre.nota());
+            movement.setStatus(MovementStatus.CONCILIACAO_PENDENTE);
+            movementRepository.save(movement);
+            gerarSugestaoConta(movement);
+            return;
+        }
+
+        // 3) Nada casou: aplica regra ou deixa pendente para revisao manual.
+        aplicarRegraOuPendente(movement, itemProprio);
+    }
+
+    // ---- Passo 1: fechar item pendente de outra movimentacao com ESTA como contrapartida ----
+    private Reconciliation melhorItemPendentePara(Movement movement) {
         List<Reconciliation> pendentes = reconciliationRepository
                 .findByEmpresaIdAndClienteIdAndStatusAndMatchedMovementIdIsNull(
-                        sistema.getEmpresaId(), sistema.getClienteId(), ReconciliationStatus.PENDENTE);
-
-        Reconciliation melhorItem = null;
-        double melhorSim = -1;
-        long melhorDiff = Long.MAX_VALUE;
+                        movement.getEmpresaId(), movement.getClienteId(), ReconciliationStatus.PENDENTE);
+        Reconciliation melhor = null;
+        double melhorNota = -1;
         for (Reconciliation item : pendentes) {
-            Movement extrato = movementRepository.findById(item.getMovementId()).orElse(null);
-            if (extrato == null || extrato.getValor() == null || extrato.getData() == null) {
+            if (item.getMovementId().equals(movement.getId())) {
+                continue; // o proprio item
+            }
+            Movement dirigente = movementRepository.findById(item.getMovementId()).orElse(null);
+            if (dirigente == null || mesmoArquivo(dirigente, movement)) {
                 continue;
             }
-            if (extrato.getValor().compareTo(sistema.getValor()) != 0) {
-                continue;
-            }
-            long diff = diasEntre(extrato, sistema);
-            if (diff > JANELA_DIAS) {
-                continue;
-            }
-            double sim = similaridade(extrato, sistema);
-            if (sim > melhorSim || (sim == melhorSim && diff < melhorDiff)) {
-                melhorItem = item;
-                melhorSim = sim;
-                melhorDiff = diff;
+            double nota = nota(dirigente, movement);
+            if (nota >= LIMIAR_MATCH && nota > melhorNota) {
+                melhor = item;
+                melhorNota = nota;
             }
         }
-        if (melhorItem == null) {
-            return;
+        if (melhor != null) {
+            melhor.setScore(BigDecimal.valueOf(Math.round(melhorNota * 100)));
         }
-        melhorItem.setMatchedMovementId(sistema.getId());
-        melhorItem.setCamada(melhorDiff == 0 ? "EXATA" : "APROXIMADA");
-        melhorItem.setScore(BigDecimal.valueOf(Math.round((0.6 + 0.4 * Math.max(0, melhorSim)) * 100)));
-        melhorItem.setMotivo("Match extrato x sistema (lado sistema chegou depois)");
-        reconciliationRepository.save(melhorItem);
-        sistema.setStatus(MovementStatus.CONCILIADO);
-        movementRepository.save(sistema);
+        return melhor;
     }
 
-    private Optional<Reconciliation> matchByRules(Movement movement) {
-        List<ReconciliationRule> rules = ruleRepository.findByEmpresaIdAndAtivoTrue(movement.getEmpresaId());
-        for (ReconciliationRule rule : rules) {
-            if (ruleMatches(rule, movement)) {
-                return Optional.of(build(movement, null, "REGRA",
-                        BigDecimal.valueOf(80), "Conciliado por regra: " + rule.getNome()));
+    private void fecharComContrapartida(Reconciliation item, Movement contrapartida) {
+        Movement dirigente = movementRepository.findById(item.getMovementId()).orElse(null);
+        boolean exato = dirigente != null && valorIgual(dirigente, contrapartida)
+                && diasEntre(dirigente, contrapartida) == 0;
+        item.setMatchedMovementId(contrapartida.getId());
+        item.setCamada(exato ? "EXATA" : "APROXIMADA");
+        item.setMotivo("Match automatico entre arquivos (confianca "
+                + (item.getScore() == null ? "?" : item.getScore().intValue()) + "%)");
+        reconciliationRepository.save(item);
+        contrapartida.setStatus(MovementStatus.CONCILIADO);
+        movementRepository.save(contrapartida);
+    }
+
+    // ---- Passo 2: achar a melhor movimentacao livre (NORMALIZADA) de outro arquivo ----
+    private Candidato melhorLivrePara(Movement movement) {
+        List<Movement> candidatos = movementRepository.findMatchCandidatesInWindow(
+                movement.getEmpresaId(), movement.getClienteId(), movement.getUploadId(),
+                movement.getData().minusDays(JANELA_DIAS), movement.getData().plusDays(JANELA_DIAS));
+        Movement melhor = null;
+        double melhorNota = -1;
+        for (Movement candidato : candidatos) {
+            if (candidato.getId().equals(movement.getId())
+                    || reconciliationRepository.existsByMatchedMovementId(candidato.getId())) {
+                continue;
+            }
+            double nota = nota(movement, candidato);
+            if (nota >= LIMIAR_MATCH && nota > melhorNota) {
+                melhor = candidato;
+                melhorNota = nota;
             }
         }
-        return Optional.empty();
+        return melhor == null ? null : new Candidato(melhor, melhorNota);
+    }
+
+    private void aplicarMatch(Reconciliation item, Movement dirigente, Movement contrapartida, double nota) {
+        boolean exato = valorIgual(dirigente, contrapartida) && diasEntre(dirigente, contrapartida) == 0;
+        item.setMatchedMovementId(contrapartida.getId());
+        item.setCamada(exato ? "EXATA" : "APROXIMADA");
+        item.setScore(BigDecimal.valueOf(Math.round(nota * 100)));
+        item.setMotivo(exato
+                ? "Match exato entre arquivos (data e valor)"
+                : "Match automatico entre arquivos (confianca " + Math.round(nota * 100) + "%)");
+        reconciliationRepository.save(item);
+    }
+
+    // ---- Passo 3: regra explicita ou pendencia manual ----
+    private void aplicarRegraOuPendente(Movement movement, Optional<Reconciliation> itemProprio) {
+        Optional<ReconciliationRule> regra = primeiraRegra(movement);
+        Reconciliation item = itemProprio.orElseGet(() -> novoItem(movement));
+        if (regra.isPresent()) {
+            item.setCamada("REGRA");
+            item.setScore(BigDecimal.valueOf(80));
+            item.setMotivo("Conciliado por regra: " + regra.get().getNome());
+        } else {
+            item.setCamada("MANUAL");
+            item.setScore(BigDecimal.ZERO);
+            item.setMotivo("Sem correspondencia automatica: revisao manual");
+        }
+        item.setMatchedMovementId(null);
+        reconciliationRepository.save(item);
+        movement.setStatus(MovementStatus.CONCILIACAO_PENDENTE);
+        movementRepository.save(movement);
+        gerarSugestaoConta(movement);
+        eventPublisher.publishEvent(new ConciliacaoPendenteEvent(
+                item.getId(), item.getEmpresaId(), movement.getId(), item.getMotivo()));
+    }
+
+    private void garantirPendente(Movement movement) {
+        if (reconciliationRepository.findFirstByMovementId(movement.getId()).isPresent()) {
+            return;
+        }
+        Reconciliation item = novoItem(movement);
+        item.setCamada("MANUAL");
+        item.setScore(BigDecimal.ZERO);
+        item.setMotivo("Dados insuficientes para conciliacao automatica");
+        reconciliationRepository.save(item);
+    }
+
+    // ---- Pontuacao ----
+    private double nota(Movement a, Movement b) {
+        double valorScore = valorScore(a, b);
+        if (valorScore < 0) {
+            return -1;
+        }
+        double dataScore = dataScore(a, b);
+        if (dataScore < 0) {
+            return -1;
+        }
+        double nomeScore = similaridade(a, b);
+        double total = PESO_VALOR * valorScore + PESO_DATA * dataScore + PESO_NOME * nomeScore;
+        if (papeisOpostos(a, b)) {
+            total = Math.min(1.0, total + BONUS_PAPEL_OPOSTO);
+        }
+        return total;
+    }
+
+    private boolean papeisOpostos(Movement a, Movement b) {
+        return a.getOrigem() != null && b.getOrigem() != null
+                && !a.getOrigem().equalsIgnoreCase(b.getOrigem());
+    }
+
+    private double valorScore(Movement a, Movement b) {
+        if (a.getValor() == null || b.getValor() == null) {
+            return -1;
+        }
+        double alvo = a.getValor().doubleValue();
+        double cand = b.getValor().doubleValue();
+        double base = Math.max(Math.abs(alvo), 0.01);
+        double ratio = Math.abs(alvo - cand) / base; // sinais opostos -> ratio grande -> descarta
+        if (ratio > TOLERANCIA_VALOR_PCT) {
+            return -1;
+        }
+        return 1.0 - (ratio / TOLERANCIA_VALOR_PCT);
+    }
+
+    private double dataScore(Movement a, Movement b) {
+        long dd = diasEntre(a, b);
+        if (dd > JANELA_DIAS) {
+            return -1;
+        }
+        return 1.0 - ((double) dd / JANELA_DIAS);
+    }
+
+    private boolean valorIgual(Movement a, Movement b) {
+        return a.getValor() != null && b.getValor() != null
+                && a.getValor().compareTo(b.getValor()) == 0;
+    }
+
+    private long diasEntre(Movement a, Movement b) {
+        return Math.abs(ChronoUnit.DAYS.between(a.getData(), b.getData()));
+    }
+
+    private boolean mesmoArquivo(Movement a, Movement b) {
+        return a.getUploadId() != null && a.getUploadId().equals(b.getUploadId());
+    }
+
+    private double similaridade(Movement a, Movement b) {
+        String na = DescriptionNormalizer.normalize(a.getDescricao());
+        String nb = DescriptionNormalizer.normalize(b.getDescricao());
+        if (na.isBlank() || nb.isBlank()) {
+            return 0.0;
+        }
+        return Math.max(StringSimilarity.tokenSimilarity(na, nb), StringSimilarity.ratio(na, nb));
+    }
+
+    private Optional<ReconciliationRule> primeiraRegra(Movement movement) {
+        List<ReconciliationRule> rules = ruleRepository.findByEmpresaIdAndAtivoTrue(movement.getEmpresaId());
+        return rules.stream().filter(rule -> ruleMatches(rule, movement)).findFirst();
     }
 
     private boolean ruleMatches(ReconciliationRule rule, Movement movement) {
@@ -188,49 +310,26 @@ public class MatchingService {
         return descricaoOk && valorOk;
     }
 
-    private Reconciliation pendingWithoutMatch(Movement movement) {
-        return build(movement, null, "MANUAL", BigDecimal.ZERO,
-                "Sem correspondencia automatica no sistema: revisao manual");
-    }
-
-    private long diasEntre(Movement a, Movement b) {
-        return Math.abs(ChronoUnit.DAYS.between(a.getData(), b.getData()));
-    }
-
-    // Similaridade da contraparte: normaliza a descricao (tira prefixos genericos e
-    // numeros) para comparar os nomes/CNPJ das partes, nao o tipo de operacao.
-    private double similaridade(Movement a, Movement b) {
-        return StringSimilarity.ratio(normalizar(a.getDescricao()), normalizar(b.getDescricao()));
-    }
-
-    private String normalizar(String descricao) {
-        if (descricao == null) {
-            return "";
+    private void gerarSugestaoConta(Movement movement) {
+        try {
+            suggestionService.suggestDeterministic(movement);
+        } catch (RuntimeException ex) {
+            log.warn("Sugestao de conta ignorada para movimentacao {}: {}",
+                    movement.getId(), ex.getMessage());
         }
-        String texto = descricao.toLowerCase();
-        // Remove prefixos de tipo de operacao que nao ajudam a identificar a contraparte.
-        texto = texto.replaceAll(
-                "\\b(pix|ted|doc|tef|pagamento|recebido|recebimento|boleto|cred|deb|"
-                + "credito|debito|transferencia|cartao|debito|liquid|princ|de|da|do|ltda|sa|s/a|me|epp)\\b",
-                " ");
-        texto = texto.replaceAll("[0-9]", " ").replaceAll("[^a-z ]", " ").replaceAll("\\s+", " ").trim();
-        return texto;
     }
 
-    private Reconciliation build(Movement movement, UUID matchedId, String camada,
-                                 BigDecimal score, String motivo) {
+    private Reconciliation novoItem(Movement movement) {
         Reconciliation reconciliation = new Reconciliation();
         reconciliation.setEmpresaId(movement.getEmpresaId());
-        // EA: propaga cliente e competencia (1o dia do mes da movimentacao).
         reconciliation.setClienteId(movement.getClienteId());
         reconciliation.setCompetencia(
                 movement.getData() != null ? movement.getData().withDayOfMonth(1) : null);
         reconciliation.setMovementId(movement.getId());
-        reconciliation.setMatchedMovementId(matchedId);
         reconciliation.setStatus(ReconciliationStatus.PENDENTE);
-        reconciliation.setCamada(camada);
-        reconciliation.setScore(score);
-        reconciliation.setMotivo(motivo);
         return reconciliation;
+    }
+
+    private record Candidato(Movement movimento, double nota) {
     }
 }

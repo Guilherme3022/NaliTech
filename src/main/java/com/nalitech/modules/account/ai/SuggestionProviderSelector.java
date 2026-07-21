@@ -31,4 +31,13 @@ public class SuggestionProviderSelector {
         }
         return List.of(heuristic);
     }
+
+    /**
+     * Apenas os provedores deterministicos e de custo zero (heuristica/aprendizado),
+     * sem chamar LLM. Usado na sugestao proativa em lote do pipeline de conciliacao,
+     * onde acionar a IA por movimentacao seria caro/lento.
+     */
+    public List<AiSuggestionProvider> deterministicProviders() {
+        return List.of(heuristic);
+    }
 }

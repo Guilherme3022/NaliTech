@@ -49,7 +49,28 @@ public class ClassificationSuggestionService {
         Movement movement = movementRepository
                 .findByIdAndEmpresaId(movementId, SecurityUtils.currentEmpresaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Movimentacao nao encontrada."));
+        return suggest(movement);
+    }
 
+    /**
+     * Gera e persiste a sugestao de conta para uma movimentacao ja carregada. Nao usa
+     * contexto de seguranca (usa {@code movement.getEmpresaId()}), podendo ser chamado
+     * pelo pipeline assincrono de conciliacao para ja deixar a conta pre-sugerida no
+     * item — antes mesmo do contador abrir a tela.
+     */
+    public AiSuggestion suggest(Movement movement) {
+        return suggest(movement, true);
+    }
+
+    /**
+     * Sugestao proativa de custo zero (regra + aprendizado, sem LLM), usada em lote pelo
+     * pipeline de conciliacao para ja deixar a conta pre-sugerida no item.
+     */
+    public AiSuggestion suggestDeterministic(Movement movement) {
+        return suggest(movement, false);
+    }
+
+    private AiSuggestion suggest(Movement movement, boolean incluirIa) {
         Optional<AccountRule> rule = ruleEngineService.firstMatching(movement);
         if (rule.isPresent() && rule.get().getContaId() != null) {
             return persist(movement, rule.get().getContaId(), BigDecimal.valueOf(95), "REGRA");
@@ -58,7 +79,10 @@ public class ClassificationSuggestionService {
         // Sugestoes so podem apontar para contas lancaveis (analiticas); contas sinteticas
         // sao agrupadoras e nunca recebem lancamento.
         List<ChartOfAccount> contas = chartRepository.findLancaveisByEmpresa(movement.getEmpresaId());
-        for (AiSuggestionProvider provider : providerSelector.providers()) {
+        List<AiSuggestionProvider> provedores = incluirIa
+                ? providerSelector.providers()
+                : providerSelector.deterministicProviders();
+        for (AiSuggestionProvider provider : provedores) {
             Optional<SuggestedAccount> sugestao = provider.suggest(movement, contas);
             if (sugestao.isPresent()) {
                 return persist(movement, sugestao.get().contaId(), sugestao.get().confianca(),

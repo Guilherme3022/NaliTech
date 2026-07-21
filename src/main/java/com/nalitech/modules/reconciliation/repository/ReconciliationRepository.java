@@ -16,6 +16,9 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
 
     Optional<Reconciliation> findByIdAndEmpresaId(UUID id, UUID empresaId);
 
+    // Item de conciliacao que tem esta movimentacao como "dirigente" (movementId).
+    Optional<Reconciliation> findFirstByMovementId(UUID movementId);
+
     // Evita casar a mesma movimentacao do sistema com dois itens de extrato.
     boolean existsByMatchedMovementId(UUID matchedMovementId);
 
@@ -26,6 +29,16 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
 
     // Limpeza em cascata quando um upload (e suas movimentacoes) e removido.
     void deleteByMovementIdIn(java.util.Collection<UUID> movementIds);
+
+    // Itens onde a movimentacao removida e o lado extrato (movementId) ou o lado
+    // sistema (matchedMovementId), para desfazer reservas/associacoes na exclusao.
+    List<Reconciliation> findByMovementIdIn(java.util.Collection<UUID> movementIds);
+
+    List<Reconciliation> findByMatchedMovementIdIn(java.util.Collection<UUID> matchedMovementIds);
+
+    // Pendentes por cliente (metrica de carteira do dashboard).
+    long countByEmpresaIdAndClienteIdAndStatus(UUID empresaId, UUID clienteId,
+                                               ReconciliationStatus status);
 
     Page<Reconciliation> findByEmpresaIdAndStatus(UUID empresaId, ReconciliationStatus status,
                                                   Pageable pageable);
