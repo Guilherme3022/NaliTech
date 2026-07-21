@@ -203,9 +203,19 @@ public class UploadService {
             reconciliationRepository.deleteByMovementIdIn(movimentoIds);
             movementRepository.deleteAll(movimentos);
         }
-        fileRepository.findByIdAndEmpresaId(upload.getFileId(), empresaId)
-                .ifPresent(f -> storageService.delete(f.getStorageKey()));
+        // Remove o upload primeiro e faz flush: a FK uploads.file_id -> files e
+        // ON DELETE CASCADE, entao o `file` precisa sair depois (senao o cascade do
+        // banco apagaria o upload junto e o delete explicito afetaria 0 linhas).
+        UUID fileId = upload.getFileId();
         uploadRepository.delete(upload);
+        uploadRepository.flush();
+        // Agora remove o arquivo tanto do storage (binario no MinIO) quanto da tabela
+        // `files` (metadados), para nao deixar o registro orfao no banco.
+        fileRepository.findByIdAndEmpresaId(fileId, empresaId)
+                .ifPresent(f -> {
+                    storageService.delete(f.getStorageKey());
+                    fileRepository.delete(f);
+                });
     }
 
     private void validate(MultipartFile file) {
