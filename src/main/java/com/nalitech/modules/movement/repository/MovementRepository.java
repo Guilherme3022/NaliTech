@@ -40,6 +40,21 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
 
     List<Movement> findByEmpresaIdAndValor(UUID empresaId, BigDecimal valor);
 
+    // Conciliacao aproximada / IA: candidatos numa faixa de valor (tolerancia de
+    // centavos) e janela de datas (compensacao D+n). Exclui-se o proprio no service.
+    @Query("""
+            select m from Movement m
+            where m.empresaId = :empresaId
+              and m.valor between :valorMin and :valorMax
+              and (cast(:dataInicio as string) is null or m.data between :dataInicio and :dataFim)
+            order by m.data
+            """)
+    List<Movement> findReconciliationCandidates(@Param("empresaId") UUID empresaId,
+                                                @Param("valorMin") BigDecimal valorMin,
+                                                @Param("valorMax") BigDecimal valorMax,
+                                                @Param("dataInicio") LocalDate dataInicio,
+                                                @Param("dataFim") LocalDate dataFim);
+
     List<Movement> findByEmpresaIdAndDataBetweenAndStatusIn(UUID empresaId, LocalDate inicio,
                                                            LocalDate fim, List<MovementStatus> statuses);
 

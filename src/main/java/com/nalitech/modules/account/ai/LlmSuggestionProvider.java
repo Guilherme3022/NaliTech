@@ -1,6 +1,7 @@
 package com.nalitech.modules.account.ai;
 
 import com.nalitech.modules.account.entity.ChartOfAccount;
+import com.nalitech.modules.aiusage.service.AiUsageService;
 import com.nalitech.modules.movement.entity.Movement;
 import java.math.BigDecimal;
 import java.util.List;
@@ -27,12 +28,15 @@ public class LlmSuggestionProvider implements AiSuggestionProvider {
     private final String apiKey;
     private final String model;
     private final RestClient restClient;
+    private final AiUsageService aiUsageService;
 
     public LlmSuggestionProvider(@Value("${AI_API_URL:https://api.openai.com/v1}") String baseUrl,
                                  @Value("${AI_API_KEY:}") String apiKey,
-                                 @Value("${AI_MODEL:gpt-4o-mini}") String model) {
+                                 @Value("${AI_MODEL:gpt-4o-mini}") String model,
+                                 AiUsageService aiUsageService) {
         this.apiKey = apiKey;
         this.model = model;
+        this.aiUsageService = aiUsageService;
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", "Bearer " + apiKey)
@@ -69,6 +73,8 @@ public class LlmSuggestionProvider implements AiSuggestionProvider {
                     .retrieve()
                     .body(Map.class);
 
+            registrarConsumo(movement, response);
+
             String codigo = extrairCodigo(response);
             if (codigo == null) {
                 return Optional.empty();
@@ -82,6 +88,23 @@ public class LlmSuggestionProvider implements AiSuggestionProvider {
             log.warn("Falha ao consultar LLM para sugestao de conta: {}", ex.getMessage());
             return Optional.empty();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void registrarConsumo(Movement movement, Map<String, Object> response) {
+        long entrada = 0;
+        long saida = 0;
+        Object usage = response == null ? null : response.get("usage");
+        if (usage instanceof Map<?, ?> u) {
+            entrada = asLong(u.get("prompt_tokens"));
+            saida = asLong(u.get("completion_tokens"));
+        }
+        aiUsageService.record(movement.getEmpresaId(), AiUsageService.FEATURE_CLASSIFICACAO,
+                entrada, saida);
+    }
+
+    private long asLong(Object value) {
+        return value instanceof Number n ? n.longValue() : 0L;
     }
 
     private String montarPrompt(Movement movement, List<ChartOfAccount> contas) {

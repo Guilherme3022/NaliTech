@@ -1,10 +1,14 @@
 package com.nalitech.modules.reconciliation.controller;
 
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ConfirmRequest;
+import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.AiSweepJob;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ReconciliationResponse;
+import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ReprocessResponse;
 import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
+import com.nalitech.modules.reconciliation.service.ReconciliationAiSweepService;
 import com.nalitech.modules.reconciliation.service.ReconciliationService;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,9 +27,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReconciliationController {
 
     private final ReconciliationService reconciliationService;
+    private final ReconciliationAiSweepService aiSweepService;
 
-    public ReconciliationController(ReconciliationService reconciliationService) {
+    public ReconciliationController(ReconciliationService reconciliationService,
+                                   ReconciliationAiSweepService aiSweepService) {
         this.reconciliationService = reconciliationService;
+        this.aiSweepService = aiSweepService;
     }
 
     @GetMapping("/pending")
@@ -63,5 +70,34 @@ public class ReconciliationController {
     @PostMapping("/{id}/reject")
     public ReconciliationResponse reject(@PathVariable UUID id) {
         return reconciliationService.reject(id);
+    }
+
+    // Re-roda o matching nas pendencias sem correspondencia (MANUAL), aplicando
+    // novas regras e/ou a IA de conciliacao. Filtros opcionais por cliente/competencia.
+    @PostMapping("/reprocess")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CONTADOR')")
+    public ReprocessResponse reprocess(@RequestParam(required = false) UUID clienteId,
+                                       @RequestParam(required = false) String competencia) {
+        return reconciliationService.reprocessPending(clienteId, parseCompetencia(competencia));
+    }
+
+    // Dispara a varredura por IA (assincrona) das pendencias MANUAL que faltam.
+    // Devolve o job com o total; a tela acompanha o progresso pelos GETs abaixo.
+    @PostMapping("/ai-sweep")
+    public AiSweepJob startAiSweep(@RequestParam(required = false) UUID clienteId,
+                                   @RequestParam(required = false) String competencia) {
+        return aiSweepService.start(clienteId, parseCompetencia(competencia));
+    }
+
+    // Progresso de um job especifico (barra de carregamento).
+    @GetMapping("/ai-sweep/{jobId}")
+    public AiSweepJob aiSweepStatus(@PathVariable UUID jobId) {
+        return aiSweepService.status(jobId);
+    }
+
+    // Jobs ativos/recentes da empresa (popup que reaparece ao navegar).
+    @GetMapping("/ai-sweep")
+    public List<AiSweepJob> aiSweepActive() {
+        return aiSweepService.active();
     }
 }

@@ -299,6 +299,22 @@ IA só se quiser acelerar a parametrização inicial de clientes novos; e consid
 **Groq/Ollama** para não ter custo. Avalie também privacidade: enviar descrições
 de extratos a um LLM externo pode ser sensível — Ollama (local) evita isso.
 
+### 5.3. IA na conciliação (validador sob demanda)
+
+Além da classificação de conta, a IA pode **validar as conciliações que ficaram
+sem correspondência automática** (as `MANUAL`): um botão dispara uma varredura
+assíncrona que pergunta ao LLM se algum candidato plausível corresponde ao
+lançamento, antes de o contador ter que resolver na mão.
+
+É **desligada por padrão** e **independente** da IA de classificação. Reaproveita
+o mesmo provedor (`AI_API_URL`/`AI_API_KEY`/`AI_MODEL`). Para produto vendável com
+volume, a recomendação é um provedor **hospedado** (não local): **Groq** (free
+tier) como padrão.
+
+> **Guia completo de configuração na subida:** ver **`IA-CONCILIACAO.md`**
+> (variáveis `RECONCILIATION_AI_ENABLED`, `RECON_*`, escolha de provedor, custos
+> e endpoints da varredura).
+
 ---
 
 ## 6. Checklist rápido de go-live

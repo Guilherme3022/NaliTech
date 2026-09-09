@@ -121,8 +121,10 @@ Cada etapa relevante emite um evento de domínio, que alimenta notificações (E
 métricas (E17) e webhooks externos (E20) sem acoplamento.
 
 A **conciliação** (E8) usa um algoritmo em camadas: (1) match exato por data+valor,
-(2) valor + similaridade de descrição (Levenshtein), (3) regras configuráveis,
-(4) pendente para revisão manual. As decisões do contador retroalimentam o
+(2) valor + similaridade de descrição (Jaccard por tokens), (3) regras configuráveis,
+(4) match aproximado (tolerância de centavos/dias) e (5) validação por IA sob demanda
+(varredura assíncrona das pendências, opcional — ver `IA-CONCILIACAO.md`); o que
+sobrar fica pendente para revisão manual. As decisões do contador retroalimentam o
 **aprendizado** (E9), melhorando as sugestões de conta futuras.
 
 ---

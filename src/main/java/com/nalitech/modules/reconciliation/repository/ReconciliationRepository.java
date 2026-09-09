@@ -37,4 +37,33 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
                                 Pageable pageable);
 
     long countByEmpresaIdAndStatus(UUID empresaId, ReconciliationStatus status);
+
+    // Reprocessamento: pendencias sem correspondencia (camada MANUAL) para re-rodar
+    // o matching apos novas regras / com a IA ligada. Filtros opcionais.
+    @Query("""
+            select r from Reconciliation r
+            where r.empresaId = :empresaId
+              and r.status = com.nalitech.modules.reconciliation.entity.ReconciliationStatus.PENDENTE
+              and r.camada = 'MANUAL'
+              and (cast(:clienteId as string) is null or r.clienteId = :clienteId)
+              and (cast(:competencia as string) is null or r.competencia = :competencia)
+            """)
+    java.util.List<Reconciliation> findManualPending(@Param("empresaId") UUID empresaId,
+                                                     @Param("clienteId") UUID clienteId,
+                                                     @Param("competencia") LocalDate competencia);
+
+    // Sweep de IA: pendencias MANUAL que o LLM ainda NAO avaliou (ia_tentada=false).
+    // Evita re-chamar a IA para itens ja analisados (memoria/cache).
+    @Query("""
+            select r from Reconciliation r
+            where r.empresaId = :empresaId
+              and r.status = com.nalitech.modules.reconciliation.entity.ReconciliationStatus.PENDENTE
+              and r.camada = 'MANUAL'
+              and r.iaTentada = false
+              and (cast(:clienteId as string) is null or r.clienteId = :clienteId)
+              and (cast(:competencia as string) is null or r.competencia = :competencia)
+            """)
+    java.util.List<Reconciliation> findManualPendingNotAiTried(@Param("empresaId") UUID empresaId,
+                                                              @Param("clienteId") UUID clienteId,
+                                                              @Param("competencia") LocalDate competencia);
 }

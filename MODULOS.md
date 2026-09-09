@@ -217,17 +217,17 @@ Assim que o upload termina de normalizar as movimentações, um evento
 commit, o `ReconciliationPipelineListener`, que chama o `MatchingService` para
 cada movimentação nova.
 
-### As 4 camadas (nesta ordem)
+### As camadas (nesta ordem)
 
 1. **Match exato (`EXATA`, score 100)**
    Procura outra movimentação da mesma empresa com **mesma data e mesmo valor**.
    Se achar, casa direto — é o caso mais confiável.
 
 2. **Match por similaridade (`SIMILARIDADE`, score = semelhança × 100)**
-   Entre movimentações de **mesmo valor**, compara as **descrições** por
-   similaridade textual (`StringSimilarity.ratio`). Se a melhor semelhança for
-   **≥ 0,70 (70%)**, casa por similaridade. Serve para pequenas variações de
-   texto (abreviações, espaços, etc.).
+   Entre movimentações de **mesmo valor**, compara as **descrições** normalizadas
+   por similaridade de tokens (`StringSimilarity.tokenSimilarity`, índice de
+   Jaccard — robusto a números/datas variáveis). Se a melhor semelhança for
+   **≥ 0,70 (70%)**, casa por similaridade.
 
 3. **Match por regra (`REGRA`, score 80)**
    Aplica as **regras de conciliação ativas** da empresa. Uma regra pode exigir
@@ -235,9 +235,30 @@ cada movimentação nova.
    Se a movimentação satisfaz a regra, é conciliada por ela (sem apontar uma
    contrapartida específica).
 
-4. **Sem correspondência (`MANUAL`, score 0)**
+4. **Match aproximado (`APROXIMADA`, score 60–90)**
+   Tolera **diferença de centavos** no valor (`RECON_VALUE_TOLERANCE`) e de
+   **alguns dias** na data (`RECON_DATE_WINDOW_DAYS`, ex.: compensação D+n),
+   exigindo descrição razoavelmente parecida. Resolve tarifa embutida e
+   lançamentos que caem um ou dois dias depois.
+
+5. **Validação por IA (`IA`, score = confiança)** — *sob demanda, opcional*
+   Não roda no processamento automático. Um botão dispara uma **varredura
+   assíncrona** que pergunta a um LLM se algum candidato plausível corresponde ao
+   lançamento. Só sugere acima de uma confiança mínima. Desligada por padrão —
+   ver **`IA-CONCILIACAO.md`**.
+
+6. **Sem correspondência (`MANUAL`, score 0)**
    Se nenhuma camada resolveu, a conciliação fica **pendente para revisão
    manual** e dispara um `ConciliacaoPendenteEvent` (usado para notificar).
+
+### Ferramentas de apoio às pendências
+
+- **Reprocessar** (`POST /reconciliations/reprocess`): re-roda as camadas
+  algorítmicas nas pendências `MANUAL` — útil após cadastrar regras novas.
+- **Validar com IA** (`POST /reconciliations/ai-sweep`): varredura assíncrona por
+  IA das pendências `MANUAL`, com barra de progresso via
+  `GET /reconciliations/ai-sweep/{jobId}` e popup persistente via
+  `GET /reconciliations/ai-sweep`. Detalhes em **`IA-CONCILIACAO.md`**.
 
 > Em todos os casos a movimentação fica com status `CONCILIACAO_PENDENTE` e é
 > criado um registro de conciliação com status `PENDENTE`. Ou seja, **o
@@ -261,7 +282,7 @@ cada uma com a **camada** que a gerou, o **score** e o **motivo**. Então:
 |---|---|
 | Movimentação | `NORMALIZADO` → `CONCILIACAO_PENDENTE` → `CONCILIADO` → `CLASSIFICADO` |
 | Conciliação | `PENDENTE` → `CONFIRMADO` ou `REJEITADO` |
-| Camadas de match | `EXATA` (100) · `SIMILARIDADE` (≥70%) · `REGRA` (80) · `MANUAL` (0) |
+| Camadas de match | `EXATA` (100) · `SIMILARIDADE` (≥70%) · `REGRA` (80) · `APROXIMADA` (60–90) · `IA` (confiança) · `MANUAL` (0) |
 
 ### Dica de configuração
 Quanto mais bem cadastradas as **regras de conciliação** (e depois as **regras

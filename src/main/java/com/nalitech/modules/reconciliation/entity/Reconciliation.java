@@ -50,4 +50,9 @@ public class Reconciliation extends TenantEntity {
 
     @Column(length = 250)
     private String motivo;
+
+    // IA (validador paliativo): true quando o LLM ja avaliou este item (com ou sem
+    // match), para nao chama-lo de novo no proximo sweep. Ver AiReconciliationMatcher.
+    @Column(name = "ia_tentada", nullable = false)
+    private boolean iaTentada = false;
 }
