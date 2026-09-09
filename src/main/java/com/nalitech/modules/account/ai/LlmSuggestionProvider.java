@@ -4,6 +4,7 @@ import com.nalitech.modules.account.entity.ChartOfAccount;
 import com.nalitech.modules.aiusage.service.AiUsageService;
 import com.nalitech.modules.movement.entity.Movement;
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,15 +28,18 @@ public class LlmSuggestionProvider implements AiSuggestionProvider {
 
     private final String apiKey;
     private final String model;
+    private final String reasoningEffort;
     private final RestClient restClient;
     private final AiUsageService aiUsageService;
 
     public LlmSuggestionProvider(@Value("${AI_API_URL:https://api.openai.com/v1}") String baseUrl,
                                  @Value("${AI_API_KEY:}") String apiKey,
                                  @Value("${AI_MODEL:gpt-4o-mini}") String model,
+                                 @Value("${AI_REASONING_EFFORT:low}") String reasoningEffort,
                                  AiUsageService aiUsageService) {
         this.apiKey = apiKey;
         this.model = model;
+        this.reasoningEffort = reasoningEffort;
         this.aiUsageService = aiUsageService;
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
@@ -60,16 +64,21 @@ public class LlmSuggestionProvider implements AiSuggestionProvider {
         }
         try {
             String prompt = montarPrompt(movement, contas);
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("temperature", 0);
+            // Modelos "reasoning" (ex.: gpt-oss): esforco baixo = menos tokens/custo.
+            if (StringUtils.hasText(reasoningEffort)) {
+                requestBody.put("reasoning_effort", reasoningEffort);
+            }
+            requestBody.put("messages", List.of(
+                    Map.of("role", "system", "content",
+                            "Voce e um assistente contabil. Responda APENAS com o codigo "
+                                    + "da conta contabil mais adequada, sem texto extra."),
+                    Map.of("role", "user", "content", prompt)));
             Map<String, Object> response = restClient.post()
                     .uri("/chat/completions")
-                    .body(Map.of(
-                            "model", model,
-                            "temperature", 0,
-                            "messages", List.of(
-                                    Map.of("role", "system", "content",
-                                            "Voce e um assistente contabil. Responda APENAS com o codigo "
-                                                    + "da conta contabil mais adequada, sem texto extra."),
-                                    Map.of("role", "user", "content", prompt))))
+                    .body(requestBody)
                     .retrieve()
                     .body(Map.class);
 

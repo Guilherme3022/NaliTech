@@ -61,7 +61,7 @@ com volume**, use um provedor **hospedado** (evite rodar local):
 
 | Provedor | `AI_API_URL` | Custo | Observação |
 |---|---|---|---|
-| **Groq** ⭐ | `https://api.groq.com/openai/v1` | **Free tier** generoso | Recomendado. Rápido, modelos Llama. Sujeito a limites de requisições/min. |
+| **Groq** ⭐ | `https://api.groq.com/openai/v1` | **Free tier** (com limites de req/min) | Recomendado. Use `openai/gpt-oss-20b` (os `llama-3.x` foram depreciados no Groq). |
 | **Google Gemini** | `https://generativelanguage.googleapis.com/v1beta/openai` | Free tier | Endpoint compatível com OpenAI. |
 | **OpenRouter** | `https://openrouter.ai/api/v1` | Alguns modelos **free** | Agrega vários modelos; bom para fallback. |
 | **OpenAI** | `https://api.openai.com/v1` | Pago por uso | Barato (`gpt-4o-mini`), útil se o free tier limitar. |
@@ -75,10 +75,13 @@ Modelos sugeridos por provedor:
 
 | Provedor | `AI_MODEL` sugerido |
 |---|---|
-| Groq | `llama-3.3-70b-versatile` (ou `llama-3.1-8b-instant` p/ mais velocidade) |
+| Groq ⭐ | `openai/gpt-oss-20b` (melhor custo/qualidade); `openai/gpt-oss-120b` mais forte; `qwen/qwen3.6-27b` alternativa |
 | Gemini | `gemini-2.0-flash` |
-| OpenRouter | um modelo `:free` (ex.: `meta-llama/llama-3.3-70b-instruct:free`) |
+| OpenRouter | um modelo `:free` |
 | OpenAI | `gpt-4o-mini` |
+
+> ⚠️ Os modelos `llama-3.x` (ex.: `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`)
+> foram **depreciados/migrados no Groq** — evite em projeto novo.
 
 ---
 
@@ -93,7 +96,7 @@ RECONCILIATION_AI_ENABLED=true
 # Provedor hospedado (Groq free tier)
 AI_API_URL=https://api.groq.com/openai/v1
 AI_API_KEY=gsk_...                       # sua chave do Groq (NUNCA commitar)
-AI_MODEL=llama-3.3-70b-versatile
+AI_MODEL=openai/gpt-oss-20b
 ```
 
 Só isso. As demais variáveis (`RECON_*`) têm defaults sensatos — ver seção 4.

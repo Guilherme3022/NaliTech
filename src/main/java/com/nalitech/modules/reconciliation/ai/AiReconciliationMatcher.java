@@ -34,6 +34,7 @@ public class AiReconciliationMatcher {
 
     private final boolean enabled;
     private final String model;
+    private final String reasoningEffort;
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final AiUsageService aiUsageService;
@@ -43,10 +44,12 @@ public class AiReconciliationMatcher {
             @Value("${AI_API_URL:https://api.openai.com/v1}") String baseUrl,
             @Value("${AI_API_KEY:}") String apiKey,
             @Value("${AI_MODEL:gpt-4o-mini}") String model,
+            @Value("${AI_REASONING_EFFORT:low}") String reasoningEffort,
             ObjectMapper objectMapper,
             AiUsageService aiUsageService) {
         this.enabled = enabled;
         this.model = model;
+        this.reasoningEffort = reasoningEffort;
         this.objectMapper = objectMapper;
         this.aiUsageService = aiUsageService;
         RestClient.Builder builder = RestClient.builder().baseUrl(baseUrl);
@@ -71,34 +74,44 @@ public class AiReconciliationMatcher {
         if (!enabled || target == null || candidates == null || candidates.isEmpty()) {
             return Optional.empty();
         }
+        String prompt = montarPrompt(target, candidates);
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("model", model);
+        body.put("temperature", 0);
+        // gpt-oss e modelo "reasoning": esforco baixo = menos tokens/custo e JSON mais limpo.
+        // AI_REASONING_EFFORT= (vazio) omite o parametro, p/ provedores que nao o aceitam.
+        if (StringUtils.hasText(reasoningEffort)) {
+            body.put("reasoning_effort", reasoningEffort);
+        }
+        body.put("messages", List.of(
+                java.util.Map.of("role", "system", "content",
+                        "Voce e um assistente de conciliacao bancaria. Dada uma "
+                                + "movimentacao e uma lista numerada de candidatos, "
+                                + "identifique qual candidato representa a MESMA "
+                                + "transacao (contrapartida). Responda APENAS com um "
+                                + "objeto JSON, sem texto extra."),
+                java.util.Map.of("role", "user", "content", prompt)));
+
+        // Chamada ao LLM. Falhas de transporte (429/rede) PROPAGAM de proposito: o
+        // chamador (sweep) precisa distinguir "indisponivel" (retentar depois) de
+        // "avaliou e nao achou" (marcar como tentado). Nao engula o 429 aqui.
+        java.util.Map<String, Object> response = restClient.post()
+                .uri("/chat/completions")
+                .body(body)
+                .retrieve()
+                .body(java.util.Map.class);
+
+        registrarConsumo(target, response);
+
+        // A resposta chegou: falha de parsing vira "sem match" (nao e indisponibilidade).
         try {
-            String prompt = montarPrompt(target, candidates);
-            java.util.Map<String, Object> response = restClient.post()
-                    .uri("/chat/completions")
-                    .body(java.util.Map.of(
-                            "model", model,
-                            "temperature", 0,
-                            "messages", List.of(
-                                    java.util.Map.of("role", "system", "content",
-                                            "Voce e um assistente de conciliacao bancaria. Dada uma "
-                                                    + "movimentacao e uma lista numerada de candidatos, "
-                                                    + "identifique qual candidato representa a MESMA "
-                                                    + "transacao (contrapartida). Responda APENAS com um "
-                                                    + "objeto JSON, sem texto extra."),
-                                    java.util.Map.of("role", "user", "content", prompt))))
-                    .retrieve()
-                    .body(java.util.Map.class);
-
-            // Contabiliza o consumo (a chamada ja aconteceu, com ou sem match).
-            registrarConsumo(target, response);
-
             String content = extrairConteudo(response);
             if (content == null) {
                 return Optional.empty();
             }
             return interpretar(content, candidates);
         } catch (Exception ex) {
-            log.warn("Falha ao consultar LLM para conciliacao: {}", ex.getMessage());
+            log.warn("Falha ao interpretar resposta do LLM: {}", ex.getMessage());
             return Optional.empty();
         }
     }

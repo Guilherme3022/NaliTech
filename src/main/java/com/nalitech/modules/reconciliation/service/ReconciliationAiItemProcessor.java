@@ -79,8 +79,15 @@ public class ReconciliationAiItemProcessor {
             return false;
         }
 
-        Optional<AiMatch> aiMatch = aiMatcher.findMatch(movement, candidatos)
-                .filter(m -> m.confianca().compareTo(minConfidence) >= 0);
+        Optional<AiMatch> aiMatch;
+        try {
+            aiMatch = aiMatcher.findMatch(movement, candidatos)
+                    .filter(m -> m.confianca().compareTo(minConfidence) >= 0);
+        } catch (RuntimeException ex) {
+            // IA indisponivel (rate limit 429 / rede): NAO marca como tentado, para
+            // reprocessar no proximo sweep quando o limite do free tier resetar.
+            return false;
+        }
 
         boolean resolvido = false;
         if (aiMatch.isPresent()) {
