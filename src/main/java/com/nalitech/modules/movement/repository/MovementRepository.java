@@ -21,15 +21,21 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
             select m from Movement m
             where m.empresaId = :empresaId
               and (cast(:clienteId as string) is null or m.clienteId = :clienteId)
+              and (cast(:origem as string) is null or m.origem = :origem)
               and (cast(:inicio as string) is null or m.data >= :inicio)
               and (cast(:fim as string) is null or m.data <= :fim)
+              and (cast(:q as string) is null
+                   or lower(m.descricao) like lower(concat('%', cast(:q as string), '%'))
+                   or lower(m.documento) like lower(concat('%', cast(:q as string), '%')))
             order by m.data desc
             """)
     org.springframework.data.domain.Page<Movement> search(
             @Param("empresaId") UUID empresaId,
             @Param("clienteId") UUID clienteId,
+            @Param("origem") String origem,
             @Param("inicio") LocalDate inicio,
             @Param("fim") LocalDate fim,
+            @Param("q") String q,
             org.springframework.data.domain.Pageable pageable);
 
     List<Movement> findByUploadId(UUID uploadId);
@@ -40,20 +46,24 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
 
     List<Movement> findByEmpresaIdAndValor(UUID empresaId, BigDecimal valor);
 
-    // Conciliacao aproximada / IA: candidatos numa faixa de valor (tolerancia de
-    // centavos) e janela de datas (compensacao D+n). Exclui-se o proprio no service.
+    // Candidatos livres para casar com uma movimentacao: mesmo cliente, de OUTRO arquivo
+    // (uploadId diferente, evita casar linhas do mesmo documento), ainda nao conciliados
+    // (NORMALIZADO) e com data dentro de uma janela. O papel do documento (extrato x
+    // sistema) NAO e exigido aqui (vira apenas um bonus no score) para casar mesmo quando
+    // o usuario nao marcou os papeis. O casamento por valor/nome/data e pontuado em memoria.
     @Query("""
             select m from Movement m
             where m.empresaId = :empresaId
-              and m.valor between :valorMin and :valorMax
-              and (cast(:dataInicio as string) is null or m.data between :dataInicio and :dataFim)
-            order by m.data
+              and m.clienteId = :clienteId
+              and m.uploadId <> :excludeUploadId
+              and m.status = com.nalitech.modules.movement.entity.MovementStatus.NORMALIZADO
+              and m.data between :inicio and :fim
             """)
-    List<Movement> findReconciliationCandidates(@Param("empresaId") UUID empresaId,
-                                                @Param("valorMin") BigDecimal valorMin,
-                                                @Param("valorMax") BigDecimal valorMax,
-                                                @Param("dataInicio") LocalDate dataInicio,
-                                                @Param("dataFim") LocalDate dataFim);
+    List<Movement> findMatchCandidatesInWindow(@Param("empresaId") UUID empresaId,
+                                               @Param("clienteId") UUID clienteId,
+                                               @Param("excludeUploadId") UUID excludeUploadId,
+                                               @Param("inicio") LocalDate inicio,
+                                               @Param("fim") LocalDate fim);
 
     List<Movement> findByEmpresaIdAndDataBetweenAndStatusIn(UUID empresaId, LocalDate inicio,
                                                            LocalDate fim, List<MovementStatus> statuses);

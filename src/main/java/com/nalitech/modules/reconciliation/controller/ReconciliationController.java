@@ -1,12 +1,17 @@
 package com.nalitech.modules.reconciliation.controller;
 
-import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ConfirmRequest;
+import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.BatchConfirmRequest;
+import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.BatchRejectRequest;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.AiSweepJob;
+import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ConfirmRequest;
+import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.GroupMatchRequest;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ReconciliationResponse;
+import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ReconciliationSummary;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ReprocessResponse;
 import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
 import com.nalitech.modules.reconciliation.service.ReconciliationAiSweepService;
 import com.nalitech.modules.reconciliation.service.ReconciliationService;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -72,8 +77,41 @@ public class ReconciliationController {
         return reconciliationService.reject(id);
     }
 
+    // Acoes em lote: confirma/rejeita varios itens numa unica chamada.
+    @PostMapping("/confirm-batch")
+    public List<ReconciliationResponse> confirmBatch(@Valid @RequestBody BatchConfirmRequest request) {
+        return reconciliationService.confirmMany(request.itens());
+    }
+
+    @PostMapping("/reject-batch")
+    public List<ReconciliationResponse> rejectBatch(@Valid @RequestBody BatchRejectRequest request) {
+        return reconciliationService.rejectMany(request.ids());
+    }
+
+    // Pareamento N:1: agrupa varias movimentacoes do sistema contra o lancamento do extrato.
+    @PostMapping("/{id}/group-match")
+    public ReconciliationResponse groupMatch(@PathVariable UUID id,
+                                             @Valid @RequestBody GroupMatchRequest request) {
+        return reconciliationService.groupMatch(id, request);
+    }
+
+    // Otimizacao global do match dos itens pendentes (atribuicao otima aproximada).
+    @PostMapping("/optimize")
+    public void optimize(@RequestParam UUID clienteId,
+                         @RequestParam String competencia) {
+        reconciliationService.optimize(clienteId, parseCompetencia(competencia));
+    }
+
+    // Resumo do lote (por status: quantidade e soma dos valores).
+    @GetMapping("/summary")
+    public ReconciliationSummary summary(
+            @RequestParam(required = false) UUID clienteId,
+            @RequestParam(required = false) String competencia) {
+        return reconciliationService.summary(clienteId, parseCompetencia(competencia));
+    }
+
     // Re-roda o matching nas pendencias sem correspondencia (MANUAL), aplicando
-    // novas regras e/ou a IA de conciliacao. Filtros opcionais por cliente/competencia.
+    // novas regras. Filtros opcionais por cliente/competencia.
     @PostMapping("/reprocess")
     @PreAuthorize("hasAnyRole('ADMIN', 'CONTADOR')")
     public ReprocessResponse reprocess(@RequestParam(required = false) UUID clienteId,
@@ -82,7 +120,6 @@ public class ReconciliationController {
     }
 
     // Dispara a varredura por IA (assincrona) das pendencias MANUAL que faltam.
-    // Devolve o job com o total; a tela acompanha o progresso pelos GETs abaixo.
     @PostMapping("/ai-sweep")
     public AiSweepJob startAiSweep(@RequestParam(required = false) UUID clienteId,
                                    @RequestParam(required = false) String competencia) {
