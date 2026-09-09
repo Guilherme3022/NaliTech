@@ -77,7 +77,7 @@ class MovementNormalizerTest {
                 });
 
         var raw = new RawMovement("01/02/2026", "-100,00", "Tarifa   bancaria", "DOC1");
-        List<UUID> ids = normalizer.normalize(UUID.randomUUID(), UUID.randomUUID(), null, "csv", List.of(raw));
+        List<UUID> ids = normalizer.normalize(UUID.randomUUID(), UUID.randomUUID(), null, "csv", null, List.of(raw));
 
         assertThat(ids).hasSize(1);
     }
@@ -94,7 +94,7 @@ class MovementNormalizerTest {
                 });
 
         var raw = new RawMovement("03/02/2026", "1.000,00", "Deposito    salario", "DOC2");
-        normalizer.normalize(UUID.randomUUID(), UUID.randomUUID(), null, "ofx", List.of(raw));
+        normalizer.normalize(UUID.randomUUID(), UUID.randomUUID(), null, "ofx", null, List.of(raw));
 
         Movement gerado = capturados.get(0);
         assertThat(gerado.getDescricao()).isEqualTo("Deposito salario");

@@ -15,7 +15,11 @@ public final class ConciliacaoDtos {
             UUID clienteId,
             LocalDate competencia,
             UUID perfilId,
-            ConciliacaoSituacao situacao) {
+            ConciliacaoSituacao situacao,
+            // true enquanto houver algum arquivo anexado ainda em processamento
+            // (upload nao finalizado: RECEBIDO/VALIDANDO/PROCESSANDO). O front usa isso
+            // para exibir o aviso de processamento e ligar o polling condicional.
+            boolean processando) {
     }
 
     // competencia chega como "YYYY-MM" (input month do front); convertida no controller.

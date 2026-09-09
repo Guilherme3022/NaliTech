@@ -5,6 +5,7 @@ import com.nalitech.modules.account.dto.AccountDtos.AccountRuleResponse;
 import com.nalitech.modules.account.dto.AccountDtos.ChartAccountRequest;
 import com.nalitech.modules.account.dto.AccountDtos.ChartAccountResponse;
 import com.nalitech.modules.account.entity.AccountRule;
+import com.nalitech.modules.account.entity.ChartAccountKind;
 import com.nalitech.modules.account.entity.ChartOfAccount;
 import com.nalitech.modules.account.repository.AccountRuleRepository;
 import com.nalitech.modules.account.repository.ChartOfAccountRepository;
@@ -54,6 +55,17 @@ public class AccountService {
                 .map(this::toResponse);
     }
 
+    /**
+     * Contas lancaveis (analiticas) de um cliente, para o seletor de conta da conciliacao/
+     * classificacao. Exclui contas sinteticas (agrupadoras), que nao recebem lancamento.
+     */
+    @Transactional(readOnly = true)
+    public List<ChartAccountResponse> listLancaveis(UUID clienteId) {
+        return chartRepository
+                .findLancaveisForCliente(SecurityUtils.currentEmpresaId(), clienteId)
+                .stream().map(this::toResponse).toList();
+    }
+
     public ChartAccountResponse updateAccount(UUID id, ChartAccountRequest request) {
         ChartOfAccount account = chartRepository
                 .findByIdAndEmpresaId(id, SecurityUtils.currentEmpresaId())
@@ -97,8 +109,15 @@ public class AccountService {
 
     private void apply(ChartOfAccount account, ChartAccountRequest request) {
         account.setCodigo(request.codigo());
+        // Sem valor explicito, classificacao/original espelham o codigo (conta de codigo unico).
+        account.setCodigoClassificacao(
+                blankTo(request.codigoClassificacao(), request.codigo()));
+        account.setCodigoOriginal(
+                blankTo(request.codigoOriginal(), request.codigo()));
         account.setNome(request.nome());
         account.setTipo(request.tipo());
+        account.setAnalitica(ChartAccountKind.resolveAnalitica(request.analitica(), request.tipo()));
+        account.setNaturezaSaldo(request.naturezaSaldo());
         account.setCategoryId(request.categoryId());
         account.setParentId(request.parentId());
         account.setClienteId(request.clienteId());
@@ -121,8 +140,15 @@ public class AccountService {
         rule.setDocumentoContains(request.documentoContains());
     }
 
+    private static String blankTo(String value, String fallback) {
+        return value != null && !value.isBlank() ? value : fallback;
+    }
+
     private ChartAccountResponse toResponse(ChartOfAccount a) {
-        return new ChartAccountResponse(a.getId(), a.getCodigo(), a.getNome(), a.getTipo(),
+        return new ChartAccountResponse(a.getId(), a.getCodigo(),
+                a.getCodigoClassificacao(), a.getCodigoOriginal(),
+                a.getNome(), a.getTipo(),
+                a.getAnalitica(), a.getNaturezaSaldo(),
                 a.getCategoryId(), a.getParentId(), a.getClienteId());
     }
 

@@ -4,6 +4,7 @@ import com.nalitech.modules.movement.dto.MovementDtos.MovementResponse;
 import com.nalitech.modules.movement.dto.MovementDtos.UpdateMovementRequest;
 import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.modules.movement.repository.MovementRepository;
+import com.nalitech.modules.reconciliation.repository.ReconciliationMatchRepository;
 import com.nalitech.modules.reconciliation.repository.ReconciliationRepository;
 import com.nalitech.security.SecurityUtils;
 import com.nalitech.shared.exception.ResourceNotFoundException;
@@ -21,19 +22,24 @@ public class MovementService {
 
     private final MovementRepository movementRepository;
     private final ReconciliationRepository reconciliationRepository;
+    private final ReconciliationMatchRepository matchRepository;
 
     public MovementService(MovementRepository movementRepository,
-                           ReconciliationRepository reconciliationRepository) {
+                           ReconciliationRepository reconciliationRepository,
+                           ReconciliationMatchRepository matchRepository) {
         this.movementRepository = movementRepository;
         this.reconciliationRepository = reconciliationRepository;
+        this.matchRepository = matchRepository;
     }
 
     @Transactional(readOnly = true)
-    public Page<MovementResponse> list(UUID clienteId, LocalDate competencia, Pageable pageable) {
+    public Page<MovementResponse> list(UUID clienteId, String origem, String q, LocalDate competencia,
+                                       Pageable pageable) {
         LocalDate inicio = competencia;
         LocalDate fim = competencia == null ? null : competencia.plusMonths(1).minusDays(1);
+        String termo = (q == null || q.isBlank()) ? null : q.trim();
         return movementRepository
-                .search(SecurityUtils.currentEmpresaId(), clienteId, inicio, fim, pageable)
+                .search(SecurityUtils.currentEmpresaId(), clienteId, origem, inicio, fim, termo, pageable)
                 .map(this::toResponse);
     }
 
@@ -54,7 +60,9 @@ public class MovementService {
 
     public void delete(UUID id) {
         Movement movement = find(id);
-        // Remove tambem os itens de conciliacao gerados a partir desta movimentacao.
+        // Remove tambem os itens de conciliacao gerados a partir desta movimentacao
+        // e as pernas de agrupamento (N:1) que a referenciam.
+        matchRepository.deleteByMovementIdIn(List.of(movement.getId()));
         reconciliationRepository.deleteByMovementIdIn(List.of(movement.getId()));
         movementRepository.delete(movement);
     }
@@ -66,7 +74,7 @@ public class MovementService {
 
     private MovementResponse toResponse(Movement m) {
         return new MovementResponse(m.getId(), m.getClienteId(), m.getData(), m.getValor(),
-                m.getDescricao(), m.getTipo(), m.getDocumento(), m.getBanco(),
+                m.getDescricao(), m.getTipo(), m.getDocumento(), m.getBanco(), m.getOrigem(),
                 m.getContaDebitoId(), m.getContaCreditoId(), m.getStatus());
     }
 }

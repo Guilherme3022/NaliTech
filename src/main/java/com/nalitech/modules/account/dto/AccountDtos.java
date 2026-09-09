@@ -12,16 +12,22 @@ public final class AccountDtos {
 
     public record ChartAccountRequest(
             @NotBlank String codigo,
+            // Opcionais: quando ausentes, assumem o valor de `codigo` (contas com codigo unico).
+            String codigoClassificacao,
+            String codigoOriginal,
             @NotBlank String nome,
             String tipo,
+            Boolean analitica,
+            String naturezaSaldo,
             UUID categoryId,
             UUID parentId,
             UUID clienteId) {
     }
 
     public record ChartAccountResponse(
-            UUID id, String codigo, String nome, String tipo, UUID categoryId, UUID parentId,
-            UUID clienteId) {
+            UUID id, String codigo, String codigoClassificacao, String codigoOriginal,
+            String nome, String tipo, Boolean analitica, String naturezaSaldo,
+            UUID categoryId, UUID parentId, UUID clienteId) {
     }
 
     public record AccountRuleRequest(

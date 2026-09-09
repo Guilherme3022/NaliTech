@@ -34,22 +34,23 @@ public class MovementNormalizer {
     }
 
     public List<UUID> normalize(UUID uploadId, UUID empresaId, UUID clienteId, String origem,
-                                List<RawMovement> rawMovements) {
+                                UUID bankAccountId, List<RawMovement> rawMovements) {
         return rawMovements.stream()
-                .map(raw -> toMovement(uploadId, empresaId, clienteId, origem, raw))
+                .map(raw -> toMovement(uploadId, empresaId, clienteId, origem, bankAccountId, raw))
                 .map(movementRepository::save)
                 .map(Movement::getId)
                 .toList();
     }
 
     private Movement toMovement(UUID uploadId, UUID empresaId, UUID clienteId, String origem,
-                                RawMovement raw) {
+                                UUID bankAccountId, RawMovement raw) {
         BigDecimal valor = parseValor(raw.valor());
         Movement movement = new Movement();
         movement.setEmpresaId(empresaId);
         movement.setClienteId(clienteId);
         movement.setUploadId(uploadId);
         movement.setOrigem(origem);
+        movement.setBankAccountId(bankAccountId);
         movement.setData(parseData(raw.data()));
         movement.setValor(valor);
         movement.setTipo(valor != null && valor.signum() < 0 ? MovementType.SAIDA : MovementType.ENTRADA);

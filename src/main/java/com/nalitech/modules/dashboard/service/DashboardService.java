@@ -70,8 +70,11 @@ public class DashboardService {
                 .map(cliente -> new PortfolioItem(
                         cliente.getId(),
                         cliente.getNome(),
-                        movementRepository.countByEmpresaIdAndClienteIdAndStatus(
-                                empresaId, cliente.getId(), MovementStatus.CONCILIACAO_PENDENTE),
+                        // Pendentes de conciliacao = itens de conciliacao PENDENTES do cliente
+                        // (some quando os arquivos/itens sao removidos ou tratados), e nao o
+                        // status bruto da movimentacao (que ficava orfao apos exclusao).
+                        reconciliationRepository.countByEmpresaIdAndClienteIdAndStatus(
+                                empresaId, cliente.getId(), ReconciliationStatus.PENDENTE),
                         movementRepository.countByEmpresaIdAndClienteIdAndStatusAndCategoriaSugeridaIsNull(
                                 empresaId, cliente.getId(), MovementStatus.CONCILIADO)))
                 .sorted((a, b) -> Long.compare(

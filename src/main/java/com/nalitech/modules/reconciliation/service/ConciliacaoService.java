@@ -155,8 +155,17 @@ public class ConciliacaoService {
                 .orElseThrow(() -> new ResourceNotFoundException("Conciliacao nao encontrada."));
     }
 
+    // Uploads ainda em andamento (pipeline OCR/parse/normalizacao nao finalizado).
+    private static final java.util.List<com.nalitech.modules.file.entity.UploadStatus>
+            UPLOAD_EM_PROCESSAMENTO = java.util.List.of(
+                    com.nalitech.modules.file.entity.UploadStatus.RECEBIDO,
+                    com.nalitech.modules.file.entity.UploadStatus.VALIDANDO,
+                    com.nalitech.modules.file.entity.UploadStatus.PROCESSANDO);
+
     private ConciliacaoResponse toResponse(Conciliacao c) {
+        boolean processando = uploadRepository
+                .countByConciliacaoIdAndStatusIn(c.getId(), UPLOAD_EM_PROCESSAMENTO) > 0;
         return new ConciliacaoResponse(c.getId(), c.getClienteId(), c.getCompetencia(),
-                c.getPerfilId(), c.getSituacao());
+                c.getPerfilId(), c.getSituacao(), processando);
     }
 }

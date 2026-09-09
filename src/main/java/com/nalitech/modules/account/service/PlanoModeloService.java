@@ -5,6 +5,7 @@ import com.nalitech.modules.account.dto.PlanoModeloDtos.ContaRequest;
 import com.nalitech.modules.account.dto.PlanoModeloDtos.ContaResponse;
 import com.nalitech.modules.account.dto.PlanoModeloDtos.CreatePlanoModeloRequest;
 import com.nalitech.modules.account.dto.PlanoModeloDtos.PlanoModeloResponse;
+import com.nalitech.modules.account.entity.ChartAccountKind;
 import com.nalitech.modules.account.entity.ChartOfAccount;
 import com.nalitech.modules.account.entity.PlanoModelo;
 import com.nalitech.modules.account.entity.PlanoModeloConta;
@@ -69,6 +70,7 @@ public class PlanoModeloService {
         conta.setCodigo(request.codigo());
         conta.setNome(request.nome());
         conta.setTipo(request.tipo());
+        conta.setAnalitica(ChartAccountKind.normalize(request.tipo()).analitica());
         contaRepository.save(conta);
         return toResponse(modelo, contas(modelo.getId()));
     }
@@ -103,8 +105,12 @@ public class PlanoModeloService {
             account.setEmpresaId(empresaId);
             account.setClienteId(clienteId);
             account.setCodigo(conta.getCodigo());
+            // Modelos usam um unico codigo: classificacao/original espelham o codigo.
+            account.setCodigoClassificacao(conta.getCodigo());
+            account.setCodigoOriginal(conta.getCodigo());
             account.setNome(conta.getNome());
             account.setTipo(conta.getTipo());
+            account.setAnalitica(ChartAccountKind.resolveAnalitica(conta.getAnalitica(), conta.getTipo()));
             chartRepository.save(account);
             criadas++;
         }
