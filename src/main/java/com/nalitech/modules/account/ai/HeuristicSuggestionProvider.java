@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class HeuristicSuggestionProvider implements AiSuggestionProvider {
 
-    // Jaccard por palavras: 0.6 = pelo menos 60% dos termos em comum.
+    // Coeficiente de sobreposicao minimo (|comuns| / min(tokens)) para aceitar o padrao aprendido.
     private static final double HISTORY_THRESHOLD = 0.6;
 
     private final LearningHistoryRepository learningRepository;
@@ -47,17 +47,46 @@ public class HeuristicSuggestionProvider implements AiSuggestionProvider {
             }
         }
 
-        // 2) Fallback por similaridade de nome/descricao.
+        // 2) Fallback por similaridade de nome/descricao. Usa o COEFICIENTE DE SOBREPOSICAO
+        // (|comuns| / min(tokens)) em vez de Jaccard, para o padrao aprendido (ex.: "black
+        // decker") continuar casando mesmo quando a nova descricao vem com ruido (ex.:
+        // "liquidacao boleto <cnpj> black decker"). Empata por nota e, depois, por ocorrencias.
         String alvo = DescriptionNormalizer.normalize(movement.getDescricao());
         if (alvo.isBlank()) {
             return Optional.empty();
         }
-        return learningRepository.findByScope(movement.getEmpresaId(), movement.getClienteId()).stream()
-                .filter(h -> !h.getDescricaoPadrao().startsWith("#")) // ignora chaves de CNPJ
-                .filter(h -> StringSimilarity.tokenSimilarity(alvo, h.getDescricaoPadrao())
-                        >= HISTORY_THRESHOLD)
-                .max((a, b) -> Integer.compare(a.getOcorrencias(), b.getOcorrencias()))
-                .map(this::toSuggestion);
+        int alvoTokens = StringSimilarity.tokenCount(alvo);
+
+        LearningHistory melhor = null;
+        double melhorNota = 0.0;
+        for (LearningHistory h : learningRepository.findByScope(
+                movement.getEmpresaId(), movement.getClienteId())) {
+            String padrao = h.getDescricaoPadrao();
+            if (padrao == null || padrao.startsWith("#")) {
+                continue; // ignora chaves de CNPJ (tratadas no passo 1)
+            }
+            int comuns = StringSimilarity.commonTokenCount(alvo, padrao);
+            if (comuns == 0) {
+                continue;
+            }
+            // Guarda anti-falso-positivo: 2+ tokens distintivos em comum, ou um lado de token unico.
+            int menorLado = Math.min(alvoTokens, StringSimilarity.tokenCount(padrao));
+            if (comuns < 2 && menorLado != 1) {
+                continue;
+            }
+            double nota = StringSimilarity.tokenOverlap(alvo, padrao);
+            if (nota < HISTORY_THRESHOLD) {
+                continue;
+            }
+            boolean melhorAtual = nota > melhorNota
+                    || (nota == melhorNota && melhor != null
+                        && h.getOcorrencias() > melhor.getOcorrencias());
+            if (melhor == null || melhorAtual) {
+                melhorNota = nota;
+                melhor = h;
+            }
+        }
+        return Optional.ofNullable(melhor).map(this::toSuggestion);
     }
 
     private SuggestedAccount toSuggestion(LearningHistory learned) {
