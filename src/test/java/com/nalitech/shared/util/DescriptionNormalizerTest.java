@@ -26,11 +26,19 @@ class DescriptionNormalizerTest {
 
     @Test
     void focaNaContraparteRemovendoTermosGenericos() {
-        // Termos de operacao (pix, recebido) sao removidos; sobra a contraparte.
+        // Termos de operacao (pix, recebido, boleto) e genericos de razao social/geografia
+        // (brasil, ltda) sao removidos; sobra o nucleo que identifica a contraparte.
         assertThat(DescriptionNormalizer.normalize("PIX RECEBIDO NESTLE BRASIL"))
-                .isEqualTo("nestle brasil");
+                .isEqualTo("nestle");
         assertThat(DescriptionNormalizer.normalize("PAGAMENTO DE BOLETO NESTLE BRASIL LTDA"))
-                .isEqualTo("nestle brasil");
+                .isEqualTo("nestle");
+    }
+
+    @Test
+    void liquidacaoDeBoletoFocaNaContraparte() {
+        // Caso Black & Decker: sobra so o nucleo distintivo do nome.
+        assertThat(DescriptionNormalizer.normalize("LIQUIDACAO BOLETO 53296273000191 BLACK E DECKER"))
+                .isEqualTo("black decker");
     }
 
     @Test

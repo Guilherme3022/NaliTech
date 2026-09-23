@@ -93,18 +93,4 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
     List<Reconciliation> findManualPending(@Param("empresaId") UUID empresaId,
                                            @Param("clienteId") UUID clienteId,
                                            @Param("competencia") LocalDate competencia);
-
-    // Sweep de IA: pendencias MANUAL que o LLM ainda NAO avaliou (ia_tentada=false).
-    @Query("""
-            select r from Reconciliation r
-            where r.empresaId = :empresaId
-              and r.status = com.nalitech.modules.reconciliation.entity.ReconciliationStatus.PENDENTE
-              and r.camada = 'MANUAL'
-              and r.iaTentada = false
-              and (cast(:clienteId as string) is null or r.clienteId = :clienteId)
-              and (cast(:competencia as string) is null or r.competencia = :competencia)
-            """)
-    List<Reconciliation> findManualPendingNotAiTried(@Param("empresaId") UUID empresaId,
-                                                     @Param("clienteId") UUID clienteId,
-                                                     @Param("competencia") LocalDate competencia);
 }

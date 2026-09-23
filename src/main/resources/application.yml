@@ -76,7 +76,7 @@ nalitech:
     capacity: ${RATE_LIMIT_CAPACITY:10}
     refill-period-seconds: ${RATE_LIMIT_REFILL_SECONDS:60}
 
-# ----- Conciliacao: tolerancias do matching + camada de IA (E8) -----
+# ----- Conciliacao: tolerancias do matching algoritmico (E8) -----
 reconciliation:
   match:
     # Match aproximado: tolera diferenca de centavos no valor e de dias na data.
@@ -85,11 +85,6 @@ reconciliation:
     # Gate da camada SIMILARIDADE (0-1) e da descricao no match aproximado.
     similarity-threshold: ${RECON_SIMILARITY_THRESHOLD:0.7}
     approx-desc-threshold: ${RECON_APPROX_DESC_THRESHOLD:0.5}
-    # Camada de IA: confianca minima para aceitar, teto de candidatos por chamada,
-    # e se a IA roda ja no pipeline automatico (padrao: nao; roda no sweep sob demanda).
-    ai-min-confidence: ${RECON_AI_MIN_CONFIDENCE:70}
-    ai-max-candidates: ${RECON_AI_MAX_CANDIDATES:20}
-    ai-inline: ${RECON_AI_INLINE:false}
 
 # ----- Actuator / observabilidade (E0-Task 7, E17) -----
 management:

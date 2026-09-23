@@ -40,6 +40,7 @@ public class ExcelParser implements DocumentParser {
             int idxValor = ColumnResolver.indexOf(headers, ColumnResolver.VALOR);
             int idxDescricao = ColumnResolver.indexOf(headers, ColumnResolver.DESCRICAO);
             int idxDocumento = ColumnResolver.indexOf(headers, ColumnResolver.DOCUMENTO);
+            int idxTipo = ColumnResolver.indexOf(headers, ColumnResolver.TIPO);
 
             for (int i = sheet.getFirstRowNum() + 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
@@ -51,7 +52,8 @@ public class ExcelParser implements DocumentParser {
                         ColumnResolver.at(cells, idxData),
                         ColumnResolver.at(cells, idxValor),
                         ColumnResolver.at(cells, idxDescricao),
-                        ColumnResolver.at(cells, idxDocumento)));
+                        ColumnResolver.at(cells, idxDocumento),
+                        ColumnResolver.at(cells, idxTipo)));
             }
         } catch (Exception ex) {
             throw new BusinessException("Falha ao ler planilha: " + ex.getMessage(),

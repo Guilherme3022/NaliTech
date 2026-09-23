@@ -45,6 +45,14 @@ public class MovementNormalizer {
     private Movement toMovement(UUID uploadId, UUID empresaId, UUID clienteId, String origem,
                                 UUID bankAccountId, RawMovement raw) {
         BigDecimal valor = parseValor(raw.valor());
+        MovementType tipo = resolverTipo(raw.tipoIndicador(), valor);
+        // Coerencia: SAIDA sempre negativa, ENTRADA sempre positiva. Isso garante que o
+        // sinal do valor case com o tipo mesmo quando a natureza veio de um indicador D/C
+        // (e nao do sinal), evitando falhas no matching (que descarta sinais opostos).
+        if (valor != null) {
+            BigDecimal abs = valor.abs();
+            valor = tipo == MovementType.SAIDA ? abs.negate() : abs;
+        }
         Movement movement = new Movement();
         movement.setEmpresaId(empresaId);
         movement.setClienteId(clienteId);
@@ -53,11 +61,36 @@ public class MovementNormalizer {
         movement.setBankAccountId(bankAccountId);
         movement.setData(parseData(raw.data()));
         movement.setValor(valor);
-        movement.setTipo(valor != null && valor.signum() < 0 ? MovementType.SAIDA : MovementType.ENTRADA);
+        movement.setTipo(tipo);
         movement.setDescricao(limparDescricao(raw.descricao()));
         movement.setDocumento(raw.documento());
         movement.setStatus(MovementStatus.NORMALIZADO);
         return movement;
+    }
+
+    /**
+     * Define ENTRADA x SAIDA priorizando o indicador explicito do layout (convencao do
+     * EXTRATO: {@code D} = debito = saida de dinheiro; {@code C} = credito = entrada).
+     * Se o layout nao informa, cai no sinal do valor (negativo = saida). Loga WARN quando
+     * nao da para determinar, para nao "comer" saidas silenciosamente (bug historico:
+     * tudo entrava como ENTRADA).
+     */
+    MovementType resolverTipo(String tipoIndicador, BigDecimal valor) {
+        if (tipoIndicador != null && !tipoIndicador.isBlank()) {
+            String dc = tipoIndicador.trim().toUpperCase();
+            if (dc.startsWith("D")) {
+                return MovementType.SAIDA;   // debito no extrato = dinheiro saiu
+            }
+            if (dc.startsWith("C")) {
+                return MovementType.ENTRADA; // credito no extrato = dinheiro entrou
+            }
+        }
+        if (valor != null && valor.signum() != 0) {
+            return valor.signum() < 0 ? MovementType.SAIDA : MovementType.ENTRADA;
+        }
+        log.warn("Tipo (entrada/saida) indeterminado: sem indicador D/C e valor {} — assumindo ENTRADA",
+                valor);
+        return MovementType.ENTRADA;
     }
 
     BigDecimal parseValor(String raw) {

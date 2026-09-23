@@ -21,7 +21,12 @@ public final class DescriptionNormalizer {
             "recebimento", "boleto", "cred", "deb", "credito", "debito", "transferencia",
             "transf", "cartao", "deposito", "saque", "tarifa", "cobranca", "liquid", "princ",
             "conta", "corrente", "cessao", "fornecedor", "cliente", "nf", "nfe", "serie",
-            "ltda", "sa", "me", "epp", "eireli", "de", "da", "do", "dos", "das", "em");
+            "ltda", "sa", "me", "epp", "eireli", "de", "da", "do", "dos", "das", "em",
+            // Operacoes/titulos que nao identificam a contraparte.
+            "liquidacao", "titulo", "titulos", "guia", "arrecadacao", "compensacao", "parcela",
+            // Termos genericos de razao social/geografia (nao distinguem a empresa).
+            "brasil", "comercio", "industria", "comercial", "industrial", "distribuidora",
+            "cia");
 
     private DescriptionNormalizer() {
     }

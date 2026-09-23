@@ -10,6 +10,10 @@ final class ColumnResolver {
     static final List<String> DESCRICAO =
             List.of("descricao", "historico", "description", "memo", "lancamento", "detalhe");
     static final List<String> DOCUMENTO = List.of("documento", "doc", "numero", "num", "fitid");
+    // Natureza do lancamento (D = debito/saida, C = credito/entrada), quando o layout traz
+    // uma coluna dedicada em vez de valor com sinal.
+    static final List<String> TIPO =
+            List.of("tipo", "natureza", "d/c", "dc", "debito/credito", "deb/cred", "cred/deb");
 
     private ColumnResolver() {
     }

@@ -101,4 +101,54 @@ class MovementNormalizerTest {
         assertThat(gerado.getTipo()).isEqualTo(MovementType.ENTRADA);
         assertThat(gerado.getValor()).isEqualByComparingTo(new BigDecimal("1000.00"));
     }
+
+    @Test
+    void resolverTipoUsaIndicadorExplicitoAntesDoSinal() {
+        // Indicador do extrato: D = debito/saida, C = credito/entrada. Tem prioridade
+        // sobre o sinal (cobre casos em que o valor vem sem sinal, mas com coluna D/C).
+        assertThat(normalizer.resolverTipo("D", new BigDecimal("100.00")))
+                .isEqualTo(MovementType.SAIDA);
+        assertThat(normalizer.resolverTipo("C", new BigDecimal("-100.00")))
+                .isEqualTo(MovementType.ENTRADA);
+        // Aceita variacoes ("DEBITO"/"CREDITO", minusculas).
+        assertThat(normalizer.resolverTipo("debito", null)).isEqualTo(MovementType.SAIDA);
+        assertThat(normalizer.resolverTipo("credito", null)).isEqualTo(MovementType.ENTRADA);
+    }
+
+    @Test
+    void resolverTipoCaiNoSinalQuandoNaoHaIndicador() {
+        assertThat(normalizer.resolverTipo(null, new BigDecimal("-875.40")))
+                .isEqualTo(MovementType.SAIDA);
+        assertThat(normalizer.resolverTipo(null, new BigDecimal("1250.00")))
+                .isEqualTo(MovementType.ENTRADA);
+        assertThat(normalizer.resolverTipo("  ", new BigDecimal("-1.00")))
+                .isEqualTo(MovementType.SAIDA);
+    }
+
+    @Test
+    void resolverTipoSemIndicadorNemSinalAssumeEntrada() {
+        assertThat(normalizer.resolverTipo(null, BigDecimal.ZERO)).isEqualTo(MovementType.ENTRADA);
+        assertThat(normalizer.resolverTipo(null, null)).isEqualTo(MovementType.ENTRADA);
+    }
+
+    @Test
+    void normalizeDetectaSaidaPeloIndicadorMesmoComValorSemSinal() {
+        var capturados = new java.util.ArrayList<Movement>();
+        when(movementRepository.save(any(Movement.class)))
+                .thenAnswer(invocation -> {
+                    Movement m = invocation.getArgument(0);
+                    m.setId(UUID.randomUUID());
+                    capturados.add(m);
+                    return m;
+                });
+
+        // Valor sem sinal, mas com indicador D (coluna D/C do extrato) -> SAIDA.
+        var raw = new RawMovement("05/02/2026", "438,72", "Pagamento energia", "DOC3", "D");
+        normalizer.normalize(UUID.randomUUID(), UUID.randomUUID(), null, "csv", null, List.of(raw));
+
+        Movement gerado = capturados.get(0);
+        assertThat(gerado.getTipo()).isEqualTo(MovementType.SAIDA);
+        // O valor tambem e normalizado para negativo, coerente com o tipo SAIDA.
+        assertThat(gerado.getValor()).isEqualByComparingTo(new BigDecimal("-438.72"));
+    }
 }

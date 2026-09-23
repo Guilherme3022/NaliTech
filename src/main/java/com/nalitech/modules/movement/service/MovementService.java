@@ -55,6 +55,9 @@ public class MovementService {
         movement.setDocumento(request.documento());
         movement.setContaDebitoId(request.contaDebitoId());
         movement.setContaCreditoId(request.contaCreditoId());
+        if (request.tipo() != null) {
+            movement.setTipo(request.tipo());
+        }
         return toResponse(movementRepository.save(movement));
     }
 

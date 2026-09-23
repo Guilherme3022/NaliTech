@@ -6,7 +6,6 @@ import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
 import jakarta.validation.constraints.NotEmpty;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -71,6 +70,14 @@ public final class ReconciliationDtos {
     public record BatchRejectRequest(@NotEmpty List<UUID> ids) {
     }
 
+    /** "Nao conciliar": dispensa um item (opcionalmente com um motivo). */
+    public record DispensarRequest(String motivo) {
+    }
+
+    /** Dispensa varios itens de uma vez (com um motivo comum opcional). */
+    public record BatchDispensarRequest(@NotEmpty List<UUID> ids, String motivo) {
+    }
+
     /** Uma linha do resumo do lote: por status, quantos itens e a soma dos valores. */
     public record SummaryLine(ReconciliationStatus status, long quantidade, BigDecimal valorTotal) {
     }
@@ -80,18 +87,5 @@ public final class ReconciliationDtos {
 
     /** Resultado do reprocessamento de pendencias sem correspondencia (MANUAL). */
     public record ReprocessResponse(int reprocessados, int resolvidos) {
-    }
-
-    /** Estado de um job de varredura por IA (para a barra de progresso / popup). */
-    public record AiSweepJob(
-            UUID jobId,
-            String status,          // EXECUTANDO, CONCLUIDO, ERRO, SEM_PENDENCIAS
-            int total,              // pendencias a analisar
-            int processados,        // ja avaliadas pela IA
-            int resolvidos,         // quantas a IA conseguiu conciliar
-            UUID clienteId,
-            LocalDate competencia,
-            OffsetDateTime iniciadoEm,
-            OffsetDateTime concluidoEm) {
     }
 }

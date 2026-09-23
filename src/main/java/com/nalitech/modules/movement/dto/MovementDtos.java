@@ -33,6 +33,8 @@ public final class MovementDtos {
             String descricao,
             String documento,
             UUID contaDebitoId,
-            UUID contaCreditoId) {
+            UUID contaCreditoId,
+            // Correcao manual de entrada/saida (util quando o OCR/parser erra a natureza).
+            MovementType tipo) {
     }
 }

@@ -33,7 +33,8 @@ public class OfxParser implements DocumentParser {
                     tag(block, "DTPOSTED"),
                     tag(block, "TRNAMT"),
                     descricao,
-                    tag(block, "FITID")));
+                    tag(block, "FITID"),
+                    tipoIndicador(tag(block, "TRNTYPE"))));
         }
         return ParseResult.of(movements);
     }
@@ -47,5 +48,27 @@ public class OfxParser implements DocumentParser {
 
     private String firstNonNull(String a, String b) {
         return a != null ? a : b;
+    }
+
+    /**
+     * Traduz o TRNTYPE do OFX para a convencao do extrato (D = saida, C = entrada).
+     * O TRNAMT ja vem com sinal no OFX, mas o TRNTYPE torna a deteccao robusta quando
+     * algum banco envia o valor sem sinal. Tipos ambiguos retornam null (usa-se o sinal).
+     */
+    private String tipoIndicador(String trnType) {
+        if (trnType == null) {
+            return null;
+        }
+        String t = trnType.trim().toUpperCase();
+        if (t.startsWith("CREDIT") || t.equals("DEP") || t.equals("DIRECTDEP")
+                || t.equals("INT") || t.equals("DIV")) {
+            return "C";
+        }
+        if (t.startsWith("DEBIT") || t.equals("PAYMENT") || t.equals("FEE") || t.equals("SRVCHG")
+                || t.equals("ATM") || t.equals("POS") || t.equals("CHECK") || t.equals("CASH")
+                || t.equals("DIRECTDEBIT") || t.equals("REPEATPMT")) {
+            return "D";
+        }
+        return null;
     }
 }

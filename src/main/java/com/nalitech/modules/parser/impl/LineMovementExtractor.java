@@ -33,6 +33,13 @@ final class LineMovementExtractor {
     private static final Pattern MONEY_CD = Pattern.compile("(" + MONEY + ")\\s*([CD])\\b");
     private static final Pattern MONEY_RS = Pattern.compile("R\\$\\s*(" + MONEY + ")");
     private static final Pattern MONEY_ANY = Pattern.compile("(" + MONEY + ")");
+    // Debito representado por parenteses "(1.200,50)", menos a FRENTE "-875,40" (o mais
+    // comum) ou menos no FIM "1.200,50-".
+    private static final Pattern MONEY_PAREN = Pattern.compile("\\((" + MONEY + ")\\)");
+    private static final Pattern MONEY_LEADING_MINUS = Pattern.compile("-\\s*(" + MONEY + ")");
+    private static final Pattern MONEY_TRAILING_MINUS = Pattern.compile("(" + MONEY + ")\\s*-(?!\\d)");
+    // Marcador D/C isolado (OCR pode separar o indicador do valor por outras colunas).
+    private static final Pattern DC_ISOLADO = Pattern.compile("(?<![A-Za-z0-9])([CD])(?![A-Za-z0-9])");
     private static final Pattern NOISE = Pattern.compile(MONEY + "\\s*[CD]?|\\d{2}/\\d{2}/\\d{4}|R\\$");
     private static final Pattern SALDO = Pattern.compile(
             "(?i)saldo\\s+(anterior|do\\s+dia|dia|atual|final|em\\s+conta)|total\\s+(geral|do\\s+periodo)");
@@ -89,11 +96,32 @@ final class LineMovementExtractor {
                             .replaceAll("\\s+", " ").trim();
                     String doc = prev.documento() != null ? prev.documento() : c.documento;
                     movements.set(movements.size() - 1,
-                            new RawMovement(prev.data(), prev.valor(), desc.isBlank() ? null : desc, doc));
+                            new RawMovement(prev.data(), prev.valor(), desc.isBlank() ? null : desc,
+                                    doc, prev.tipoIndicador()));
                 }
             }
         }
         return movements;
+    }
+
+    /**
+     * Retorna "D"/"C" apenas quando ha UM unico marcador isolado na linha (fora de
+     * palavras/numeros). Se houver zero ou mais de um, devolve {@code null} para nao
+     * arriscar inverter entrada/saida por causa de iniciais no historico.
+     */
+    private static String dcIsolado(String line) {
+        Matcher m = DC_ISOLADO.matcher(line);
+        String encontrado = null;
+        while (m.find()) {
+            if (encontrado != null && !encontrado.equals(m.group(1))) {
+                return null; // ambiguidade (D e C na mesma linha)
+            }
+            if (encontrado != null) {
+                return null; // dois marcadores iguais: tambem ambiguo
+            }
+            encontrado = m.group(1);
+        }
+        return encontrado;
     }
 
     private record Contraparte(String nome, String documento) {
@@ -126,17 +154,40 @@ final class LineMovementExtractor {
         }
 
         String valor = null;
+        String tipo = null; // convencao do EXTRATO: D = debito/saida, C = credito/entrada
         Matcher cd = MONEY_CD.matcher(line);
         if (cd.find()) {
-            valor = "D".equals(cd.group(2)) ? "-" + cd.group(1) : cd.group(1);
+            boolean debito = "D".equals(cd.group(2));
+            valor = debito ? "-" + cd.group(1) : cd.group(1);
+            tipo = debito ? "D" : "C";
         } else {
+            Matcher paren = MONEY_PAREN.matcher(line);
+            Matcher leading = MONEY_LEADING_MINUS.matcher(line);
+            Matcher trailing = MONEY_TRAILING_MINUS.matcher(line);
             Matcher rs = MONEY_RS.matcher(line);
-            if (rs.find()) {
+            if (paren.find()) {
+                valor = "-" + paren.group(1);
+                tipo = "D";
+            } else if (leading.find()) {
+                // Saida com sinal de menos a frente do valor (ex.: "-875,40").
+                valor = "-" + leading.group(1);
+                tipo = "D";
+            } else if (trailing.find()) {
+                valor = "-" + trailing.group(1);
+                tipo = "D";
+            } else if (rs.find()) {
                 valor = "-" + rs.group(1);
+                tipo = "D";
             } else {
                 Matcher any = MONEY_ANY.matcher(line);
                 if (any.find()) {
                     valor = any.group(1);
+                    // OCR pode ter deixado o D/C longe do valor: procura um marcador
+                    // isolado e UNICO na linha (evita falso positivo com iniciais).
+                    tipo = dcIsolado(line);
+                    if ("D".equals(tipo)) {
+                        valor = "-" + valor;
+                    }
                 }
             }
         }
@@ -149,7 +200,7 @@ final class LineMovementExtractor {
         if (SALDO.matcher(descricao).find()) {
             return null;
         }
-        return new RawMovement(data, valor, descricao.isBlank() ? null : descricao, null);
+        return new RawMovement(data, valor, descricao.isBlank() ? null : descricao, null, tipo);
     }
 
     // ---------------------------------------------------------------------------------
@@ -181,7 +232,8 @@ final class LineMovementExtractor {
                     String desc = ((ultimo[0].descricao() == null ? "" : ultimo[0].descricao())
                             + " " + nome.group(1)).replaceAll("\\s+", " ").trim();
                     RawMovement prev = ultimo[0];
-                    RawMovement atualizado = new RawMovement(prev.data(), prev.valor(), desc, prev.documento());
+                    RawMovement atualizado = new RawMovement(
+                            prev.data(), prev.valor(), desc, prev.documento(), prev.tipoIndicador());
                     movements.set(movements.size() - 1, atualizado);
                     ultimo[0] = atualizado;
                 }
@@ -223,7 +275,8 @@ final class LineMovementExtractor {
                     .replaceAll("\\s+", " ")
                     .trim();
             RawMovement movement = new RawMovement(
-                    data, (negativo ? "-" : "") + valor, descricao.isBlank() ? null : descricao, null);
+                    data, (negativo ? "-" : "") + valor, descricao.isBlank() ? null : descricao,
+                    null, negativo ? "D" : "C");
             movements.add(movement);
             ultimo[0] = movement;
         }

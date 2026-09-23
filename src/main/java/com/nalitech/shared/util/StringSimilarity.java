@@ -29,6 +29,42 @@ public final class StringSimilarity {
         return (double) intersecao.size() / uniao.size();
     }
 
+    /**
+     * Coeficiente de sobreposicao: |A ∩ B| / min(|A|, |B|). Ao contrario do Jaccard, NAO
+     * penaliza quando um lado tem muito mais tokens que o outro — ideal para casar uma
+     * descricao de lancamento (com ruido) contra o nome de uma conta/razao social
+     * (ex.: "black decker" x "black decker brasil ltda").
+     */
+    public static double tokenOverlap(String a, String b) {
+        if (a == null || b == null) {
+            return 0.0;
+        }
+        Set<String> setA = tokens(a);
+        Set<String> setB = tokens(b);
+        if (setA.isEmpty() || setB.isEmpty()) {
+            return 0.0;
+        }
+        Set<String> intersecao = new HashSet<>(setA);
+        intersecao.retainAll(setB);
+        int min = Math.min(setA.size(), setB.size());
+        return (double) intersecao.size() / min;
+    }
+
+    /** Quantidade de tokens em comum entre as duas strings (ja normalizadas). */
+    public static int commonTokenCount(String a, String b) {
+        if (a == null || b == null) {
+            return 0;
+        }
+        Set<String> setA = tokens(a);
+        setA.retainAll(tokens(b));
+        return setA.size();
+    }
+
+    /** Numero de tokens da string (ja normalizada). */
+    public static int tokenCount(String a) {
+        return a == null ? 0 : tokens(a).size();
+    }
+
     private static Set<String> tokens(String value) {
         Set<String> tokens = new HashSet<>();
         for (String token : value.trim().split("\\s+")) {

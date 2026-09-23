@@ -2,21 +2,28 @@ package com.nalitech.modules.reconciliation.controller;
 
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.BatchConfirmRequest;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.BatchRejectRequest;
-import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.AiSweepJob;
+import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.BatchDispensarRequest;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ConfirmRequest;
+import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.DispensarRequest;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.GroupMatchRequest;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ReconciliationResponse;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ReconciliationSummary;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.ReprocessResponse;
 import com.nalitech.modules.reconciliation.entity.ReconciliationStatus;
-import com.nalitech.modules.reconciliation.service.ReconciliationAiSweepService;
+import com.nalitech.modules.reconciliation.service.ConciliacaoExportService;
+import com.nalitech.modules.reconciliation.service.ConciliacaoExportService.ExportFile;
+import com.nalitech.modules.reconciliation.service.ConciliacaoExportService.ExportOptions;
 import com.nalitech.modules.reconciliation.service.ReconciliationService;
+import com.nalitech.security.SecurityUtils;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,12 +39,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReconciliationController {
 
     private final ReconciliationService reconciliationService;
-    private final ReconciliationAiSweepService aiSweepService;
+    private final ConciliacaoExportService exportService;
 
     public ReconciliationController(ReconciliationService reconciliationService,
-                                   ReconciliationAiSweepService aiSweepService) {
+                                   ConciliacaoExportService exportService) {
         this.reconciliationService = reconciliationService;
-        this.aiSweepService = aiSweepService;
+        this.exportService = exportService;
     }
 
     @GetMapping("/pending")
@@ -88,6 +95,19 @@ public class ReconciliationController {
         return reconciliationService.rejectMany(request.ids());
     }
 
+    // "Nao conciliar": dispensa um item que nao precisa ser conciliado (sai da lista e nao volta).
+    @PostMapping("/{id}/dispensar")
+    public ReconciliationResponse dispensar(@PathVariable UUID id,
+                                            @RequestBody(required = false) DispensarRequest request) {
+        String motivo = request == null ? null : request.motivo();
+        return reconciliationService.dispensar(id, motivo);
+    }
+
+    @PostMapping("/dispensar-batch")
+    public List<ReconciliationResponse> dispensarBatch(@Valid @RequestBody BatchDispensarRequest request) {
+        return reconciliationService.dispensarMany(request.ids(), request.motivo());
+    }
+
     // Pareamento N:1: agrupa varias movimentacoes do sistema contra o lancamento do extrato.
     @PostMapping("/{id}/group-match")
     public ReconciliationResponse groupMatch(@PathVariable UUID id,
@@ -119,22 +139,27 @@ public class ReconciliationController {
         return reconciliationService.reprocessPending(clienteId, parseCompetencia(competencia));
     }
 
-    // Dispara a varredura por IA (assincrona) das pendencias MANUAL que faltam.
-    @PostMapping("/ai-sweep")
-    public AiSweepJob startAiSweep(@RequestParam(required = false) UUID clienteId,
-                                   @RequestParam(required = false) String competencia) {
-        return aiSweepService.start(clienteId, parseCompetencia(competencia));
-    }
-
-    // Progresso de um job especifico (barra de carregamento).
-    @GetMapping("/ai-sweep/{jobId}")
-    public AiSweepJob aiSweepStatus(@PathVariable UUID jobId) {
-        return aiSweepService.status(jobId);
-    }
-
-    // Jobs ativos/recentes da empresa (popup que reaparece ao navegar).
-    @GetMapping("/ai-sweep")
-    public List<AiSweepJob> aiSweepActive() {
-        return aiSweepService.active();
+    // Gera o arquivo de lancamentos (TXT/CSV) por cliente/competencia a QUALQUER momento
+    // (nao exige conciliacao concluida), para lancar no sistema contabil.
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> export(
+            @RequestParam UUID clienteId,
+            @RequestParam String competencia,
+            @RequestParam(defaultValue = "TXT") String formato,
+            @RequestParam(defaultValue = "false") boolean somenteConciliados,
+            @RequestParam(defaultValue = ".") String separadorDecimal,
+            @RequestParam(defaultValue = "false") boolean incluirCabecalho,
+            @RequestParam(defaultValue = "true") boolean incluirSaldoAnterior,
+            @RequestParam(defaultValue = "UTF-8") String encoding) {
+        char decimal = separadorDecimal != null && separadorDecimal.startsWith(",") ? ',' : '.';
+        ExportOptions opts = new ExportOptions(formato, decimal, encoding,
+                incluirCabecalho, somenteConciliados, incluirSaldoAnterior);
+        ExportFile file = exportService.exportCompetencia(
+                SecurityUtils.currentEmpresaId(), clienteId, parseCompetencia(competencia), opts);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + file.filename() + "\"")
+                .contentType(MediaType.parseMediaType(file.contentType()))
+                .body(file.content());
     }
 }

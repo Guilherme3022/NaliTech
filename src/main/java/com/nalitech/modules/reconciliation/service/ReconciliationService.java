@@ -172,6 +172,37 @@ public class ReconciliationService {
     }
 
     /**
+     * "Nao conciliar": dispensa um item que nao precisa ser conciliado. Diferente do
+     * {@link #reject(UUID)}, NAO devolve a movimentacao ao pool — ela vai para o estado
+     * terminal {@link MovementStatus#IGNORADO} e o item para {@link ReconciliationStatus#DISPENSADO},
+     * saindo da lista de pendencias e nao reentrando no reprocess/otimizacao nem no export.
+     */
+    public ReconciliationResponse dispensar(UUID id, String motivo) {
+        Reconciliation reconciliation = findPending(id);
+        reconciliation.setStatus(ReconciliationStatus.DISPENSADO);
+        reconciliation.setMotivo(motivo == null || motivo.isBlank()
+                ? "Dispensado pelo usuario (nao precisa conciliar)"
+                : "Dispensado: " + motivo.trim());
+        reconciliationRepository.save(reconciliation);
+        // Se este item tinha uma contrapartida reservada, ela volta ao pool para novo match.
+        if (reconciliation.getMatchedMovementId() != null) {
+            updateMovementStatus(reconciliation.getMatchedMovementId(), MovementStatus.NORMALIZADO);
+            reconciliation.setMatchedMovementId(null);
+        }
+        updateMovementStatus(reconciliation.getMovementId(), MovementStatus.IGNORADO);
+        return toResponse(reconciliation);
+    }
+
+    /** Dispensa varios itens de uma vez (acao em lote). */
+    public List<ReconciliationResponse> dispensarMany(List<UUID> ids, String motivo) {
+        List<ReconciliationResponse> result = new ArrayList<>(ids.size());
+        for (UUID id : ids) {
+            result.add(dispensar(id, motivo));
+        }
+        return result;
+    }
+
+    /**
      * Pareamento N:1 (agrupamento): casa o lancamento do extrato (movimento principal desta
      * conciliacao) com varias movimentacoes do sistema cuja soma bate com o valor do extrato.
      * Ex.: um deposito unico que quita varias duplicatas. So agrupa se a soma conferir (a menos

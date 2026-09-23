@@ -69,5 +69,65 @@ class LineMovementExtractorTest {
         assertThat(movs.get(1).descricao()).contains("MARISELE ROCHA");
         // Debito (sinal de menos no fim) vira negativo.
         assertThat(movs.get(2).valor()).isEqualTo("-4.740,00");
+        // Banrisul tambem marca a natureza: debito = D, credito = C.
+        assertThat(movs.get(0).tipoIndicador()).isEqualTo("C");
+        assertThat(movs.get(2).tipoIndicador()).isEqualTo("D");
+    }
+
+    @Test
+    void generico_saida_com_sinal_de_menos_a_frente_do_valor() {
+        // Caso mais comum de extrato: a saida vem com "-" a frente do valor. Antes o padrao
+        // de valor descartava o sinal e tudo virava ENTRADA — este teste trava a regressao.
+        String texto = String.join("\n",
+                "01/09/2026 PIX RECEBIDO CLIENTE ALFA 1.250,00",
+                "01/09/2026 PAGAMENTO FORNECEDOR XPTO -875,40");
+
+        List<RawMovement> movs = LineMovementExtractor.extract(texto);
+
+        assertThat(movs).hasSize(2);
+        // Entrada: valor positivo, sem indicador (deriva do sinal na normalizacao).
+        assertThat(movs.get(0).valor()).isEqualTo("1.250,00");
+        // Saida: sinal de menos a frente e preservado e a natureza vira D (debito/saida).
+        assertThat(movs.get(1).valor()).isEqualTo("-875,40");
+        assertThat(movs.get(1).tipoIndicador()).isEqualTo("D");
+    }
+
+    @Test
+    void generico_saida_entre_parenteses_vira_negativo() {
+        String texto = "04/09/2026 TARIFA BANCARIA (45,00)";
+
+        List<RawMovement> movs = LineMovementExtractor.extract(texto);
+
+        assertThat(movs).hasSize(1);
+        assertThat(movs.get(0).valor()).isEqualTo("-45,00");
+        assertThat(movs.get(0).tipoIndicador()).isEqualTo("D");
+    }
+
+    @Test
+    void generico_valor_positivo_sem_marcador_fica_sem_indicador() {
+        // Sem "-", sem C/D e sem parenteses: nao da para saber a natureza pelo texto;
+        // fica sem indicador (a normalizacao assume ENTRADA pelo sinal positivo).
+        String texto = "02/09/2026 RECEBIMENTO BOLETO CLIENTE BETA 3.500,00";
+
+        List<RawMovement> movs = LineMovementExtractor.extract(texto);
+
+        assertThat(movs).hasSize(1);
+        assertThat(movs.get(0).valor()).isEqualTo("3.500,00");
+        assertThat(movs.get(0).tipoIndicador()).isNull();
+    }
+
+    @Test
+    void generico_marcador_dc_define_a_natureza() {
+        String texto = String.join("\n",
+                "03/09/2026 RECEBIMENTO CLIENTE GAMMA 1.800,00 C",
+                "03/09/2026 PAGAMENTO NF 45872 FORNECEDOR XPTO 1.200,50 D");
+
+        List<RawMovement> movs = LineMovementExtractor.extract(texto);
+
+        assertThat(movs).hasSize(2);
+        assertThat(movs.get(0).valor()).isEqualTo("1.800,00");
+        assertThat(movs.get(0).tipoIndicador()).isEqualTo("C");
+        assertThat(movs.get(1).valor()).isEqualTo("-1.200,50");
+        assertThat(movs.get(1).tipoIndicador()).isEqualTo("D");
     }
 }

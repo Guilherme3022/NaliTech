@@ -42,7 +42,8 @@ public class CsvParser implements DocumentParser {
                         get(record, ColumnResolver.DATA),
                         get(record, ColumnResolver.VALOR),
                         get(record, ColumnResolver.DESCRICAO),
-                        get(record, ColumnResolver.DOCUMENTO)));
+                        get(record, ColumnResolver.DOCUMENTO),
+                        get(record, ColumnResolver.TIPO)));
             }
         } catch (Exception ex) {
             throw new BusinessException("Falha ao ler CSV: " + ex.getMessage(),
