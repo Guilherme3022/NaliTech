@@ -32,12 +32,13 @@ class HeuristicSuggestionProviderTest {
         provider = new HeuristicSuggestionProvider(learningRepository);
     }
 
-    private LearningHistory memoria(String padrao, UUID contaId, int ocorrencias) {
+    private LearningHistory memoria(String padrao, UUID debito, UUID credito, int ocorrencias) {
         LearningHistory h = new LearningHistory();
         h.setEmpresaId(empresa);
         h.setClienteId(cliente);
         h.setDescricaoPadrao(padrao);
-        h.setContaId(contaId);
+        h.setContaDebitoId(debito);
+        h.setContaCreditoId(credito);
         h.setOcorrencias(ocorrencias);
         return h;
     }
@@ -53,40 +54,40 @@ class HeuristicSuggestionProviderTest {
     }
 
     @Test
-    void memoriaPorDescricaoCasaMesmoComRuido() {
-        // Aprendido "black decker"; nova descricao vem com ruido (boleto/cnpj).
-        UUID conta = UUID.randomUUID();
+    void memoriaPorDescricaoDevolveOParDebitoCredito() {
+        UUID debito = UUID.randomUUID();
+        UUID credito = UUID.randomUUID();
         when(learningRepository.findByScope(empresa, cliente))
-                .thenReturn(List.of(memoria("black decker", conta, 3)));
+                .thenReturn(List.of(memoria("black decker", debito, credito, 3)));
 
         Optional<SuggestedAccount> s = provider.suggest(
                 movimento("LIQUIDACAO BOLETO 53296273000191 BLACK DECKER", null), List.of());
 
         assertThat(s).isPresent();
-        assertThat(s.get().contaId()).isEqualTo(conta);
+        assertThat(s.get().contaDebitoId()).isEqualTo(debito);
+        assertThat(s.get().contaCreditoId()).isEqualTo(credito);
     }
 
     @Test
     void memoriaPorCnpjTemPrioridade() {
-        UUID contaCnpj = UUID.randomUUID();
-        // docKey do CNPJ 53.296.273/0001-91 -> "#53296273000191"
+        UUID debito = UUID.randomUUID();
+        UUID credito = UUID.randomUUID();
         when(learningRepository.findScoped(empresa, cliente, "#53296273000191"))
-                .thenReturn(Optional.of(memoria("#53296273000191", contaCnpj, 2)));
+                .thenReturn(Optional.of(memoria("#53296273000191", debito, credito, 2)));
 
         Optional<SuggestedAccount> s = provider.suggest(
                 movimento("PAGAMENTO FORNECEDOR", "53.296.273/0001-91"), List.of());
 
         assertThat(s).isPresent();
-        assertThat(s.get().contaId()).isEqualTo(contaCnpj);
-        // Confianca por CNPJ: min(95, 75 + ocorrencias*5) = 85.
+        assertThat(s.get().contaDebitoId()).isEqualTo(debito);
+        assertThat(s.get().contaCreditoId()).isEqualTo(credito);
         assertThat(s.get().confianca().intValue()).isEqualTo(85);
     }
 
     @Test
-    void naoCasaPorTokenGenericoUnico() {
-        // Memoria "energia eletrica" nao deve casar com "black decker" (0 tokens em comum).
+    void naoCasaSemTokenEmComum() {
         when(learningRepository.findByScope(empresa, cliente))
-                .thenReturn(List.of(memoria("energia eletrica", UUID.randomUUID(), 5)));
+                .thenReturn(List.of(memoria("energia eletrica", UUID.randomUUID(), null, 5)));
 
         Optional<SuggestedAccount> s = provider.suggest(
                 movimento("PIX BLACK DECKER", null), List.of());
@@ -96,18 +97,17 @@ class HeuristicSuggestionProviderTest {
 
     @Test
     void desempataPelaMaiorOcorrencia() {
-        UUID contaA = UUID.randomUUID();
-        UUID contaB = UUID.randomUUID();
-        // Duas memorias com mesma sobreposicao (1.0); vence a de mais ocorrencias.
+        UUID debitoA = UUID.randomUUID();
+        UUID debitoB = UUID.randomUUID();
         when(learningRepository.findByScope(empresa, cliente))
                 .thenReturn(List.of(
-                        memoria("black decker", contaA, 2),
-                        memoria("black decker", contaB, 9)));
+                        memoria("black decker", debitoA, null, 2),
+                        memoria("black decker", debitoB, null, 9)));
 
         Optional<SuggestedAccount> s = provider.suggest(
                 movimento("BLACK DECKER", null), List.of());
 
         assertThat(s).isPresent();
-        assertThat(s.get().contaId()).isEqualTo(contaB);
+        assertThat(s.get().contaDebitoId()).isEqualTo(debitoB);
     }
 }

@@ -21,12 +21,12 @@ public class LearningEventListener {
     @EventListener
     @Transactional
     public void onConciliacaoConfirmada(ConciliacaoConfirmadaEvent event) {
-        if (event.contaSugerida() == null) {
-            return;
-        }
+        // Aprende a PARTIDA DOBRADA (debito + credito) ja gravada no movimento pela confirmacao,
+        // por descricao e por CNPJ, para pre-preencher as duas contas na proxima vez.
         movementRepository.findById(event.movementId()).ifPresent(movement ->
                 learningService.recordDecision(
                         event.empresaId(), movement.getClienteId(),
-                        movement.getDescricao(), movement.getDocumento(), event.contaSugerida()));
+                        movement.getDescricao(), movement.getDocumento(),
+                        movement.getContaDebitoId(), movement.getContaCreditoId()));
     }
 }

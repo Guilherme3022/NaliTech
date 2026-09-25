@@ -16,6 +16,9 @@ public final class ConciliacaoDtos {
             LocalDate competencia,
             UUID perfilId,
             ConciliacaoSituacao situacao,
+            // false = cliente nao envia planilha de contas a pagar/receber (so extrato):
+            // a tela esconde o lado do sistema.
+            boolean recebeSistema,
             // true enquanto houver algum arquivo anexado ainda em processamento
             // (upload nao finalizado: RECEBIDO/VALIDANDO/PROCESSANDO). O front usa isso
             // para exibir o aviso de processamento e ligar o polling condicional.
@@ -26,6 +29,7 @@ public final class ConciliacaoDtos {
     public record CreateConciliacaoRequest(
             @NotNull UUID clienteId,
             @NotNull String competencia,
-            UUID perfilId) {
+            UUID perfilId,
+            Boolean recebeSistema) {
     }
 }

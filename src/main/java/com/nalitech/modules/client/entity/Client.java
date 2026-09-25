@@ -38,4 +38,8 @@ public class Client extends TenantEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ClientStatus status = ClientStatus.ATIVO;
+
+    // Codigo da empresa no sistema contabil de destino (ultimo campo do TXT de lancamentos).
+    @Column(name = "codigo_empresa_contabil")
+    private Integer codigoEmpresaContabil;
 }

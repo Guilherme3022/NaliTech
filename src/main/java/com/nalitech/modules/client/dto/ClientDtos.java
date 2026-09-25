@@ -16,7 +16,8 @@ public final class ClientDtos {
             @NotBlank String cnpjCpf,
             String contato,
             String telefone,
-            @Email String email) {
+            @Email String email,
+            Integer codigoEmpresaContabil) {
     }
 
     public record UpdateClientRequest(
@@ -24,7 +25,8 @@ public final class ClientDtos {
             String contato,
             String telefone,
             @Email String email,
-            ClientStatus status) {
+            ClientStatus status,
+            Integer codigoEmpresaContabil) {
     }
 
     public record ClientResponse(
@@ -34,7 +36,8 @@ public final class ClientDtos {
             String contato,
             String telefone,
             String email,
-            ClientStatus status) {
+            ClientStatus status,
+            Integer codigoEmpresaContabil) {
     }
 
     public record ClientDocumentResponse(

@@ -6,6 +6,7 @@ import com.nalitech.modules.account.repository.AiSuggestionRepository;
 import com.nalitech.modules.account.repository.ChartOfAccountRepository;
 import com.nalitech.modules.movement.entity.Movement;
 import com.nalitech.modules.movement.entity.MovementStatus;
+import com.nalitech.modules.movement.entity.MovementType;
 import com.nalitech.modules.movement.repository.MovementRepository;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.BatchConfirmItem;
 import com.nalitech.modules.reconciliation.dto.ReconciliationDtos.MovementView;
@@ -128,21 +129,48 @@ public class ReconciliationService {
         return new PageImpl<>(buildResponses(page.getContent()), pageable, page.getTotalElements());
     }
 
-    public ReconciliationResponse confirm(UUID id, UUID contaSugerida) {
+    public ReconciliationResponse confirm(UUID id, UUID contaDebitoId, UUID contaCreditoId,
+                                          UUID contaSugerida) {
         Reconciliation reconciliation = findPending(id);
         requirePlanoDeContas(reconciliation);
-        requireContaLancavel(reconciliation, contaSugerida);
+        Movement movement = movementRepository.findById(reconciliation.getMovementId()).orElse(null);
+        UUID contrapartida = contaSugerida;
+
+        if (contaDebitoId != null || contaCreditoId != null) {
+            // Partida dobrada escolhida na tela: grava debito E credito no movimento.
+            requireContaLancavel(reconciliation, contaDebitoId);
+            requireContaLancavel(reconciliation, contaCreditoId);
+            if (movement != null) {
+                boolean saida = isSaida(movement);
+                movement.setContaDebitoId(contaDebitoId);
+                movement.setContaCreditoId(contaCreditoId);
+                movement.setCategoriaSugerida(saida ? contaDebitoId : contaCreditoId);
+                movement.setStatus(MovementStatus.CLASSIFICADO);
+                movementRepository.save(movement);
+                contrapartida = saida ? contaDebitoId : contaCreditoId;
+            }
+        } else {
+            // Modo legado: uma unica contrapartida (o banco e resolvido na classificacao).
+            requireContaLancavel(reconciliation, contaSugerida);
+            updateMovementStatus(reconciliation.getMovementId(), MovementStatus.CONCILIADO);
+        }
+
         reconciliation.setStatus(ReconciliationStatus.CONFIRMADO);
         reconciliationRepository.save(reconciliation);
-
-        updateMovementStatus(reconciliation.getMovementId(), MovementStatus.CONCILIADO);
         // Aprende o vinculo (apelido de contraparte) quando ha correspondencia.
         aprenderVinculo(reconciliation);
 
         eventPublisher.publishEvent(new ConciliacaoConfirmadaEvent(
                 reconciliation.getId(), reconciliation.getEmpresaId(),
-                reconciliation.getMovementId(), contaSugerida));
+                reconciliation.getMovementId(), contrapartida));
         return toResponse(reconciliation);
+    }
+
+    private boolean isSaida(Movement movement) {
+        if (movement.getTipo() != null) {
+            return movement.getTipo() == MovementType.SAIDA;
+        }
+        return movement.getValor() != null && movement.getValor().signum() < 0;
     }
 
     public ReconciliationResponse reject(UUID id) {
@@ -157,7 +185,8 @@ public class ReconciliationService {
     public List<ReconciliationResponse> confirmMany(List<BatchConfirmItem> itens) {
         List<ReconciliationResponse> result = new ArrayList<>(itens.size());
         for (BatchConfirmItem item : itens) {
-            result.add(confirm(item.id(), item.contaSugerida()));
+            result.add(confirm(item.id(), item.contaDebitoId(), item.contaCreditoId(),
+                    item.contaSugerida()));
         }
         return result;
     }
@@ -427,7 +456,8 @@ public class ReconciliationService {
 
     private MovementView toMovementView(Movement m) {
         return new MovementView(m.getId(), m.getData(), m.getValor(), m.getDescricao(),
-                m.getDocumento(), m.getBanco(), m.getTipo(), m.getStatus());
+                m.getDocumento(), m.getBanco(), m.getTipo(), m.getStatus(),
+                m.getContaDebitoId(), m.getContaCreditoId());
     }
 
     // Conta a sugerir no item: a ja escolhida no movimento tem prioridade; senao, a ultima

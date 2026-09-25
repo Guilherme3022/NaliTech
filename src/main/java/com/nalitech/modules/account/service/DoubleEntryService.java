@@ -39,7 +39,7 @@ public class DoubleEntryService {
         }
     }
 
-    private UUID resolveContaBanco(Movement movement) {
+    public UUID resolveContaBanco(Movement movement) {
         // 1) Banco especifico do extrato (quando o cliente tem varios bancos) tem prioridade.
         if (movement.getBankAccountId() != null) {
             UUID conta = bankAccountRepository

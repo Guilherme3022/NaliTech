@@ -76,7 +76,9 @@ public class ReconciliationController {
     public ReconciliationResponse confirm(@PathVariable UUID id,
                                           @RequestBody(required = false) ConfirmRequest request) {
         UUID contaSugerida = request == null ? null : request.contaSugerida();
-        return reconciliationService.confirm(id, contaSugerida);
+        UUID contaDebito = request == null ? null : request.contaDebitoId();
+        UUID contaCredito = request == null ? null : request.contaCreditoId();
+        return reconciliationService.confirm(id, contaDebito, contaCredito, contaSugerida);
     }
 
     @PostMapping("/{id}/reject")
@@ -147,11 +149,11 @@ public class ReconciliationController {
             @RequestParam String competencia,
             @RequestParam(defaultValue = "TXT") String formato,
             @RequestParam(defaultValue = "false") boolean somenteConciliados,
-            @RequestParam(defaultValue = ".") String separadorDecimal,
+            @RequestParam(defaultValue = ",") String separadorDecimal,
             @RequestParam(defaultValue = "false") boolean incluirCabecalho,
             @RequestParam(defaultValue = "true") boolean incluirSaldoAnterior,
             @RequestParam(defaultValue = "UTF-8") String encoding) {
-        char decimal = separadorDecimal != null && separadorDecimal.startsWith(",") ? ',' : '.';
+        char decimal = separadorDecimal != null && separadorDecimal.startsWith(".") ? '.' : ',';
         ExportOptions opts = new ExportOptions(formato, decimal, encoding,
                 incluirCabecalho, somenteConciliados, incluirSaldoAnterior);
         ExportFile file = exportService.exportCompetencia(

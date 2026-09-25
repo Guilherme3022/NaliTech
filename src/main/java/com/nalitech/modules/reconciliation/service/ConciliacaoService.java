@@ -50,7 +50,8 @@ public class ConciliacaoService {
                 .toList();
     }
 
-    public ConciliacaoResponse create(UUID clienteId, LocalDate competencia, UUID perfilId) {
+    public ConciliacaoResponse create(UUID clienteId, LocalDate competencia, UUID perfilId,
+                                      Boolean recebeSistema) {
         UUID empresaId = SecurityUtils.requireEmpresaId();
         // Regra: nenhuma conciliacao sem cliente (spec item 5/12).
         clientRepository.findByIdAndEmpresaId(clienteId, empresaId)
@@ -74,6 +75,14 @@ public class ConciliacaoService {
         conciliacao.setCompetencia(competencia);
         conciliacao.setPerfilId(perfilId);
         conciliacao.setSituacao(ConciliacaoSituacao.RASCUNHO);
+        conciliacao.setRecebeSistema(recebeSistema == null || recebeSistema);
+        return toResponse(conciliacaoRepository.save(conciliacao));
+    }
+
+    /** Liga/desliga o recebimento da planilha do sistema (contas a pagar/receber). */
+    public ConciliacaoResponse setRecebeSistema(UUID id, boolean recebeSistema) {
+        Conciliacao conciliacao = findInCurrentCompany(id);
+        conciliacao.setRecebeSistema(recebeSistema);
         return toResponse(conciliacaoRepository.save(conciliacao));
     }
 
@@ -166,6 +175,6 @@ public class ConciliacaoService {
         boolean processando = uploadRepository
                 .countByConciliacaoIdAndStatusIn(c.getId(), UPLOAD_EM_PROCESSAMENTO) > 0;
         return new ConciliacaoResponse(c.getId(), c.getClienteId(), c.getCompetencia(),
-                c.getPerfilId(), c.getSituacao(), processando);
+                c.getPerfilId(), c.getSituacao(), c.isRecebeSistema(), processando);
     }
 }

@@ -53,7 +53,14 @@ public class ConciliacaoController {
     @ResponseStatus(HttpStatus.CREATED)
     public ConciliacaoResponse create(@Valid @RequestBody CreateConciliacaoRequest request) {
         return conciliacaoService.create(request.clienteId(), parseCompetencia(request.competencia()),
-                request.perfilId());
+                request.perfilId(), request.recebeSistema());
+    }
+
+    // Liga/desliga o recebimento da planilha do sistema (contas a pagar/receber).
+    @PostMapping("/{id}/recebe-sistema")
+    public ConciliacaoResponse setRecebeSistema(@PathVariable UUID id,
+                                                @RequestParam boolean valor) {
+        return conciliacaoService.setRecebeSistema(id, valor);
     }
 
     @PostMapping("/{id}/uploads/{uploadId}")

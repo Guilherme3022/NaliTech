@@ -23,7 +23,10 @@ public final class ReconciliationDtos {
             String documento,
             String banco,
             MovementType tipo,
-            MovementStatus status) {
+            MovementStatus status,
+            // Partida dobrada atual/sugerida do movimento (pre-preenche os seletores na tela).
+            UUID contaDebitoId,
+            UUID contaCreditoId) {
     }
 
     /** Conta sugerida para o item, com codigo/nome legiveis e a confianca/origem da sugestao. */
@@ -53,15 +56,17 @@ public final class ReconciliationDtos {
             List<MovementView> agrupamento) {
     }
 
-    public record ConfirmRequest(UUID contaSugerida) {
+    // contaSugerida = contrapartida (modo legado, banco resolvido automatico). Preferir enviar
+    // contaDebitoId + contaCreditoId (partida dobrada escolhida na tela de conciliacao).
+    public record ConfirmRequest(UUID contaSugerida, UUID contaDebitoId, UUID contaCreditoId) {
     }
 
     /** Agrupamento N:1: as movimentacoes do sistema que somadas batem com o extrato. */
     public record GroupMatchRequest(@NotEmpty List<UUID> movementIds) {
     }
 
-    /** Item de confirmacao em lote: o id do pareamento e (opcional) a conta escolhida. */
-    public record BatchConfirmItem(UUID id, UUID contaSugerida) {
+    /** Item de confirmacao em lote: id do pareamento + contas (partida dobrada ou contrapartida). */
+    public record BatchConfirmItem(UUID id, UUID contaSugerida, UUID contaDebitoId, UUID contaCreditoId) {
     }
 
     public record BatchConfirmRequest(@NotEmpty List<BatchConfirmItem> itens) {

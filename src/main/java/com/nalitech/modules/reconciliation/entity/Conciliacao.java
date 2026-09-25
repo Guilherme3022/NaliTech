@@ -36,4 +36,9 @@ public class Conciliacao extends TenantEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ConciliacaoSituacao situacao = ConciliacaoSituacao.RASCUNHO;
+
+    // FALSE = cliente nao envia planilha de contas a pagar/receber (so extrato): a tela
+    // esconde o lado do sistema e o matching extrato x sistema nao roda.
+    @Column(name = "recebe_sistema", nullable = false)
+    private boolean recebeSistema = true;
 }

@@ -45,7 +45,7 @@ class LearningServiceTest {
         when(learningRepository.findScoped(any(), any(), any())).thenReturn(Optional.empty());
 
         service.recordDecision(empresaId, clienteId, "PIX RECEBIDO GREEN CARD",
-                "92.559.830/0001-71", contaId);
+                "92.559.830/0001-71", contaId, null);
 
         ArgumentCaptor<LearningHistory> captor = ArgumentCaptor.forClass(LearningHistory.class);
         verify(learningRepository, atLeastOnce()).save(captor.capture());

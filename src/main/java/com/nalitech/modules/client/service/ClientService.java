@@ -42,6 +42,7 @@ public class ClientService {
         client.setContato(request.contato());
         client.setTelefone(request.telefone());
         client.setEmail(request.email());
+        client.setCodigoEmpresaContabil(request.codigoEmpresaContabil());
         return clientMapper.toResponse(clientRepository.save(client));
     }
 
@@ -63,6 +64,7 @@ public class ClientService {
         client.setContato(request.contato());
         client.setTelefone(request.telefone());
         client.setEmail(request.email());
+        client.setCodigoEmpresaContabil(request.codigoEmpresaContabil());
         if (request.status() != null) {
             client.setStatus(request.status());
         }

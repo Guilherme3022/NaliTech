@@ -78,8 +78,10 @@ public class ClassificationService {
         movement.setStatus(MovementStatus.CLASSIFICADO);
         movementRepository.save(movement);
 
+        // Aprende a partida dobrada resultante (debito + credito), nao so a contrapartida.
         learningService.recordDecision(empresaId, movement.getClienteId(),
-                movement.getDescricao(), movement.getDocumento(), contaId);
+                movement.getDescricao(), movement.getDocumento(),
+                movement.getContaDebitoId(), movement.getContaCreditoId());
     }
 
     /** Ajuste manual do lancamento: define debito e credito diretamente. */

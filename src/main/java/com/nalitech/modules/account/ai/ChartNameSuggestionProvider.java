@@ -2,6 +2,7 @@ package com.nalitech.modules.account.ai;
 
 import com.nalitech.modules.account.entity.ChartOfAccount;
 import com.nalitech.modules.movement.entity.Movement;
+import com.nalitech.modules.movement.entity.MovementType;
 import com.nalitech.shared.util.DescriptionNormalizer;
 import com.nalitech.shared.util.StringSimilarity;
 import java.math.BigDecimal;
@@ -48,19 +49,20 @@ public class ChartNameSuggestionProvider implements AiSuggestionProvider {
             if (nome.isBlank()) {
                 continue;
             }
-            int comuns = StringSimilarity.commonTokenCount(alvo, nome);
+            int comuns = StringSimilarity.commonOrSimilarTokenCount(alvo, nome);
             if (comuns == 0) {
                 continue;
             }
             int menorLado = Math.min(alvoTokens, StringSimilarity.tokenCount(nome));
-            // Guarda anti-falso-positivo: exige 2+ tokens distintivos em comum, ou entao
-            // que um dos lados seja um unico token (ex.: conta "NESTLE" x "pix nestle").
+            // Guarda anti-falso-positivo: 2+ palavras iguais/parecidas, ou entao um lado de
+            // token unico (ex.: conta "NESTLE" x "pix nestle").
             boolean forte = comuns >= 2 || menorLado == 1;
             if (!forte) {
                 continue;
             }
-            // Coeficiente de sobreposicao: nao penaliza a razao social ter palavras extras.
-            double nota = StringSimilarity.tokenOverlap(alvo, nome);
+            // Sobreposicao FUZZY: casa palavras parecidas (ex.: deckers~decker) e nao
+            // penaliza a razao social ter palavras extras.
+            double nota = StringSimilarity.tokenOverlapFuzzy(alvo, nome);
             if (nota > melhorNota) {
                 melhorNota = nota;
                 melhor = conta;
@@ -71,6 +73,15 @@ public class ChartNameSuggestionProvider implements AiSuggestionProvider {
         }
         // Mapeia a nota (0.6..1.0) para uma confianca de 60..90.
         int confianca = (int) Math.round(Math.min(90, 60 + (melhorNota - THRESHOLD) * 75));
-        return Optional.of(new SuggestedAccount(melhor.getId(), BigDecimal.valueOf(confianca)));
+        // A conta casada por nome e a CONTRAPARTIDA. Coloca no lado certo conforme a direcao:
+        // SAIDA -> debito (despesa/fornecedor); ENTRADA -> credito (receita/cliente).
+        // O outro lado (banco) e resolvido depois pelo ClassificationSuggestionService.
+        BigDecimal conf = BigDecimal.valueOf(confianca);
+        boolean saida = movement.getTipo() == MovementType.SAIDA
+                || (movement.getTipo() == null && movement.getValor() != null
+                    && movement.getValor().signum() < 0);
+        return Optional.of(saida
+                ? new SuggestedAccount(melhor.getId(), null, conf)
+                : new SuggestedAccount(null, melhor.getId(), conf));
     }
 }

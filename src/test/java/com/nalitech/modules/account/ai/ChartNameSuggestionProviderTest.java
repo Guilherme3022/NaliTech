@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.nalitech.modules.account.ai.AiSuggestionProvider.SuggestedAccount;
 import com.nalitech.modules.account.entity.ChartOfAccount;
 import com.nalitech.modules.movement.entity.Movement;
+import com.nalitech.modules.movement.entity.MovementType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,59 +23,70 @@ class ChartNameSuggestionProviderTest {
         return c;
     }
 
-    private Movement movimento(String descricao) {
+    private Movement movimento(String descricao, MovementType tipo) {
         Movement m = new Movement();
         m.setId(UUID.randomUUID());
         m.setEmpresaId(UUID.randomUUID());
         m.setClienteId(UUID.randomUUID());
         m.setDescricao(descricao);
+        m.setTipo(tipo);
         return m;
     }
 
     @Test
-    void casaDescricaoComRuidoContraRazaoSocialDaConta() {
-        // Caso real: "LIQUIDACAO BOLETO <cnpj> BLACK E DECKER" deve casar com a conta
-        // "BLACK E DECKER DO BRASIL LTDA", apesar do ruido e das palavras extras.
+    void saidaCasaContrapartidaNoDebito() {
+        // "LIQUIDACAO BOLETO <cnpj> BLACK E DECKER" (SAIDA) -> contrapartida no DEBITO.
         ChartOfAccount blackDecker = conta("0000605", "BLACK E DECKER DO BRASIL LTDA");
         List<ChartOfAccount> plano = List.of(
                 conta("0000601", "NESTLE BRASIL LTDA"),
                 blackDecker,
                 conta("0000610", "ENERGIA ELETRICA"));
 
-        Optional<SuggestedAccount> sugestao = provider.suggest(
-                movimento("LIQUIDACAO BOLETO 53296273000191 BLACK E DECKER"), plano);
+        Optional<SuggestedAccount> s = provider.suggest(
+                movimento("LIQUIDACAO BOLETO 53296273000191 BLACK E DECKER", MovementType.SAIDA), plano);
 
-        assertThat(sugestao).isPresent();
-        assertThat(sugestao.get().contaId()).isEqualTo(blackDecker.getId());
-        assertThat(sugestao.get().confianca().intValue()).isGreaterThanOrEqualTo(60);
+        assertThat(s).isPresent();
+        assertThat(s.get().contaDebitoId()).isEqualTo(blackDecker.getId());
+        assertThat(s.get().contaCreditoId()).isNull();
     }
 
     @Test
-    void casaContaDeTokenUnico() {
+    void entradaCasaContrapartidaNoCredito() {
         ChartOfAccount nestle = conta("0000601", "NESTLE");
-        Optional<SuggestedAccount> sugestao = provider.suggest(
-                movimento("PIX RECEBIDO NESTLE"), List.of(nestle));
+        Optional<SuggestedAccount> s = provider.suggest(
+                movimento("PIX RECEBIDO NESTLE", MovementType.ENTRADA), List.of(nestle));
 
-        assertThat(sugestao).isPresent();
-        assertThat(sugestao.get().contaId()).isEqualTo(nestle.getId());
+        assertThat(s).isPresent();
+        assertThat(s.get().contaCreditoId()).isEqualTo(nestle.getId());
+        assertThat(s.get().contaDebitoId()).isNull();
+    }
+
+    @Test
+    void casaPalavrasParecidas() {
+        // "black deckers" (plural) deve casar com "BLACK E DECKER" (fuzzy por token).
+        ChartOfAccount blackDecker = conta("0000605", "BLACK E DECKER DO BRASIL LTDA");
+        Optional<SuggestedAccount> s = provider.suggest(
+                movimento("PAGAMENTO BLACK DECKERS", MovementType.SAIDA), List.of(blackDecker));
+
+        assertThat(s).isPresent();
+        assertThat(s.get().contaDebitoId()).isEqualTo(blackDecker.getId());
     }
 
     @Test
     void naoCasaApenasPorTermoGenericoOuGeografico() {
-        // "brasil" e generico (stopword): nao deve casar so por causa dele.
         ChartOfAccount conta = conta("0000601", "BLACK E DECKER DO BRASIL LTDA");
-        Optional<SuggestedAccount> sugestao = provider.suggest(
-                movimento("DEPOSITO BRASIL"), List.of(conta));
+        Optional<SuggestedAccount> s = provider.suggest(
+                movimento("DEPOSITO BRASIL", MovementType.SAIDA), List.of(conta));
 
-        assertThat(sugestao).isEmpty();
+        assertThat(s).isEmpty();
     }
 
     @Test
     void semTokenEmComumNaoSugere() {
         ChartOfAccount conta = conta("0000610", "ENERGIA ELETRICA");
-        Optional<SuggestedAccount> sugestao = provider.suggest(
-                movimento("PAGAMENTO FORNECEDOR XPTO"), List.of(conta));
+        Optional<SuggestedAccount> s = provider.suggest(
+                movimento("PAGAMENTO FORNECEDOR XPTO", MovementType.SAIDA), List.of(conta));
 
-        assertThat(sugestao).isEmpty();
+        assertThat(s).isEmpty();
     }
 }

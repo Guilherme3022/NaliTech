@@ -20,7 +20,16 @@ public interface AiSuggestionProvider {
     /** Sugere uma conta para a movimentacao, dado o plano de contas disponivel. */
     Optional<SuggestedAccount> suggest(Movement movement, List<ChartOfAccount> contas);
 
-    /** Conta sugerida + confianca (0-100). */
-    record SuggestedAccount(UUID contaId, BigDecimal confianca) {
+    /**
+     * Sugestao de partida dobrada: conta de debito e/ou credito + confianca (0-100).
+     * Um dos lados pode ser {@code null} quando o provedor so conhece a contrapartida
+     * (o lado do banco e preenchido depois pelo {@code DoubleEntryService}). Quando os
+     * dois lados vem preenchidos (memoria aprendida), o par e usado como esta.
+     */
+    record SuggestedAccount(UUID contaDebitoId, UUID contaCreditoId, BigDecimal confianca) {
+        /** Atalho para uma unica contrapartida (lado a ser resolvido depois). */
+        public static SuggestedAccount contrapartida(UUID contaId, BigDecimal confianca) {
+            return new SuggestedAccount(contaId, null, confianca);
+        }
     }
 }

@@ -19,8 +19,12 @@ public class LearningHistory extends TenantEntity {
     @Column(name = "descricao_padrao", nullable = false, length = 200)
     private String descricaoPadrao;
 
-    @Column(name = "conta_id", nullable = false)
-    private UUID contaId;
+    // Partida dobrada aprendida: conta de debito e de credito escolhidas pelo contador.
+    @Column(name = "conta_debito_id")
+    private UUID contaDebitoId;
+
+    @Column(name = "conta_credito_id")
+    private UUID contaCreditoId;
 
     @Column(nullable = false)
     private int ocorrencias = 1;

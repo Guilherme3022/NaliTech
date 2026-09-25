@@ -32,17 +32,20 @@ public class ClassificationSuggestionService {
     private final MovementRepository movementRepository;
     private final ChartOfAccountRepository chartRepository;
     private final SuggestionProviderSelector providerSelector;
+    private final DoubleEntryService doubleEntryService;
 
     public ClassificationSuggestionService(RuleEngineService ruleEngineService,
                                            AiSuggestionRepository suggestionRepository,
                                            MovementRepository movementRepository,
                                            ChartOfAccountRepository chartRepository,
-                                           SuggestionProviderSelector providerSelector) {
+                                           SuggestionProviderSelector providerSelector,
+                                           DoubleEntryService doubleEntryService) {
         this.ruleEngineService = ruleEngineService;
         this.suggestionRepository = suggestionRepository;
         this.movementRepository = movementRepository;
         this.chartRepository = chartRepository;
         this.providerSelector = providerSelector;
+        this.doubleEntryService = doubleEntryService;
     }
 
     public AiSuggestion suggestFor(UUID movementId) {
@@ -71,29 +74,69 @@ public class ClassificationSuggestionService {
     }
 
     private AiSuggestion suggest(Movement movement, boolean incluirIa) {
+        SuggestedAccount par = null;
+        String origem = "NENHUMA";
+        BigDecimal confianca = BigDecimal.ZERO;
+
         Optional<AccountRule> rule = ruleEngineService.firstMatching(movement);
         if (rule.isPresent() && rule.get().getContaId() != null) {
-            return persist(movement, rule.get().getContaId(), BigDecimal.valueOf(95), "REGRA");
-        }
-
-        // Sugestoes so podem apontar para contas lancaveis (analiticas) DO PROPRIO CLIENTE
-        // (mais as compartilhadas do escritorio, cliente_id nulo). Nunca contas de outro
-        // cliente da mesma empresa — senao os planos se misturam. Contas sinteticas sao
-        // agrupadoras e nunca recebem lancamento.
-        List<ChartOfAccount> contas = chartRepository.findLancaveisForCliente(
-                movement.getEmpresaId(), movement.getClienteId());
-        List<AiSuggestionProvider> provedores = incluirIa
-                ? providerSelector.providers()
-                : providerSelector.deterministicProviders();
-        for (AiSuggestionProvider provider : provedores) {
-            Optional<SuggestedAccount> sugestao = provider.suggest(movement, contas);
-            if (sugestao.isPresent()) {
-                return persist(movement, sugestao.get().contaId(), sugestao.get().confianca(),
-                        provider.origem());
+            // A conta da regra e a contrapartida; o lado (debito/credito) sai da direcao.
+            par = SuggestedAccount.contrapartida(rule.get().getContaId(), BigDecimal.valueOf(95));
+            origem = "REGRA";
+            confianca = BigDecimal.valueOf(95);
+        } else {
+            // Sugestoes so podem apontar para contas lancaveis (analiticas) DO PROPRIO CLIENTE
+            // (mais as compartilhadas do escritorio, cliente_id nulo). Nunca contas de outro
+            // cliente da mesma empresa — senao os planos se misturam.
+            List<ChartOfAccount> contas = chartRepository.findLancaveisForCliente(
+                    movement.getEmpresaId(), movement.getClienteId());
+            List<AiSuggestionProvider> provedores = incluirIa
+                    ? providerSelector.providers()
+                    : providerSelector.deterministicProviders();
+            for (AiSuggestionProvider provider : provedores) {
+                Optional<SuggestedAccount> sugestao = provider.suggest(movement, contas);
+                if (sugestao.isPresent()) {
+                    par = sugestao.get();
+                    origem = provider.origem();
+                    confianca = sugestao.get().confianca();
+                    break;
+                }
             }
         }
 
-        return persist(movement, null, BigDecimal.ZERO, "NENHUMA");
+        if (par == null) {
+            return persist(movement, null, BigDecimal.ZERO, "NENHUMA");
+        }
+
+        // Completa a partida dobrada: o lado que faltar recebe a conta do banco.
+        UUID banco = doubleEntryService.resolveContaBanco(movement);
+        UUID debito = par.contaDebitoId();
+        UUID credito = par.contaCreditoId();
+        if (debito == null && credito != null) {
+            debito = banco;
+        } else if (credito == null && debito != null) {
+            credito = banco;
+        }
+
+        // Pre-preenche as DUAS contas no movimento (so quando ainda nao ha nada escolhido),
+        // para a tela de conciliacao ja vir com debito e credito sugeridos.
+        if (movement.getContaDebitoId() == null && movement.getContaCreditoId() == null
+                && (debito != null || credito != null)) {
+            movement.setContaDebitoId(debito);
+            movement.setContaCreditoId(credito);
+            movementRepository.save(movement);
+        }
+
+        // A contrapartida (para exibir/aprender) e o lado que nao e o banco.
+        UUID contrapartida = isSaida(movement) ? debito : credito;
+        return persist(movement, contrapartida, confianca, origem);
+    }
+
+    private boolean isSaida(Movement movement) {
+        if (movement.getTipo() != null) {
+            return movement.getTipo() == com.nalitech.modules.movement.entity.MovementType.SAIDA;
+        }
+        return movement.getValor() != null && movement.getValor().signum() < 0;
     }
 
     private AiSuggestion persist(Movement movement, UUID contaId, BigDecimal confianca, String origem) {

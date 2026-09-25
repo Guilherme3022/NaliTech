@@ -1,6 +1,9 @@
 package com.nalitech.shared.util;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 public final class StringSimilarity {
@@ -63,6 +66,65 @@ public final class StringSimilarity {
     /** Numero de tokens da string (ja normalizada). */
     public static int tokenCount(String a) {
         return a == null ? 0 : tokens(a).size();
+    }
+
+    /**
+     * Dois tokens sao "muito parecidos" quando: iguais; um e prefixo do outro (>=4 chars,
+     * ex.: {@code distribuidora}/{@code distrib}); ou tem razao de similaridade >= 0.8
+     * (ex.: {@code decker}/{@code deckers}). Tokens curtos (<4) so contam se iguais.
+     */
+    public static boolean tokensSimilares(String x, String y) {
+        if (x == null || y == null) {
+            return false;
+        }
+        if (x.equals(y)) {
+            return true;
+        }
+        if (Math.min(x.length(), y.length()) < 4) {
+            return false;
+        }
+        if (x.startsWith(y) || y.startsWith(x)) {
+            return true;
+        }
+        return ratio(x, y) >= 0.8;
+    }
+
+    /** Conta tokens de A que tem um token IGUAL OU MUITO PARECIDO em B (sem reusar par). */
+    public static int commonOrSimilarTokenCount(String a, String b) {
+        List<String> tb = new ArrayList<>(tokenList(b));
+        int count = 0;
+        for (String ta : tokenList(a)) {
+            for (Iterator<String> it = tb.iterator(); it.hasNext();) {
+                if (tokensSimilares(ta, it.next())) {
+                    it.remove();
+                    count++;
+                    break;
+                }
+            }
+        }
+        return count;
+    }
+
+    /** Coeficiente de sobreposicao FUZZY: |iguais ou parecidos| / min(|A|,|B|). */
+    public static double tokenOverlapFuzzy(String a, String b) {
+        int min = Math.min(tokenCount(a), tokenCount(b));
+        if (min == 0) {
+            return 0.0;
+        }
+        return (double) commonOrSimilarTokenCount(a, b) / min;
+    }
+
+    private static List<String> tokenList(String value) {
+        List<String> tokens = new ArrayList<>();
+        if (value == null) {
+            return tokens;
+        }
+        for (String token : value.trim().split("\\s+")) {
+            if (!token.isBlank()) {
+                tokens.add(token);
+            }
+        }
+        return tokens;
     }
 
     private static Set<String> tokens(String value) {

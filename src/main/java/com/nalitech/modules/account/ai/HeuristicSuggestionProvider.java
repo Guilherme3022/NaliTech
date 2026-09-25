@@ -40,7 +40,7 @@ public class HeuristicSuggestionProvider implements AiSuggestionProvider {
         if (docKey != null) {
             Optional<SuggestedAccount> porDocumento = learningRepository
                     .findScoped(movement.getEmpresaId(), movement.getClienteId(), docKey)
-                    .map(h -> new SuggestedAccount(h.getContaId(),
+                    .map(h -> new SuggestedAccount(h.getContaDebitoId(), h.getContaCreditoId(),
                             BigDecimal.valueOf(Math.min(95, 75 + h.getOcorrencias() * 5))));
             if (porDocumento.isPresent()) {
                 return porDocumento;
@@ -65,16 +65,16 @@ public class HeuristicSuggestionProvider implements AiSuggestionProvider {
             if (padrao == null || padrao.startsWith("#")) {
                 continue; // ignora chaves de CNPJ (tratadas no passo 1)
             }
-            int comuns = StringSimilarity.commonTokenCount(alvo, padrao);
+            int comuns = StringSimilarity.commonOrSimilarTokenCount(alvo, padrao);
             if (comuns == 0) {
                 continue;
             }
-            // Guarda anti-falso-positivo: 2+ tokens distintivos em comum, ou um lado de token unico.
+            // Guarda anti-falso-positivo: 2+ palavras iguais/parecidas, ou um lado de token unico.
             int menorLado = Math.min(alvoTokens, StringSimilarity.tokenCount(padrao));
             if (comuns < 2 && menorLado != 1) {
                 continue;
             }
-            double nota = StringSimilarity.tokenOverlap(alvo, padrao);
+            double nota = StringSimilarity.tokenOverlapFuzzy(alvo, padrao);
             if (nota < HISTORY_THRESHOLD) {
                 continue;
             }
@@ -91,6 +91,6 @@ public class HeuristicSuggestionProvider implements AiSuggestionProvider {
 
     private SuggestedAccount toSuggestion(LearningHistory learned) {
         BigDecimal confianca = BigDecimal.valueOf(Math.min(90, 60 + learned.getOcorrencias() * 5));
-        return new SuggestedAccount(learned.getContaId(), confianca);
+        return new SuggestedAccount(learned.getContaDebitoId(), learned.getContaCreditoId(), confianca);
     }
 }
